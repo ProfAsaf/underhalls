@@ -122,7 +122,11 @@ button.ghost{background:transparent}
 #dpad button{padding:0;font-size:16px;color:var(--dim);border-radius:8px}
 #dpad button.mid{color:var(--faint);font-size:11px}
 .modal{position:fixed;inset:0;background:rgba(5,6,9,.88);display:none;flex-direction:column;
-  padding:14px 14px calc(14px + env(safe-area-inset-bottom));z-index:50}
+  padding:calc(14px + env(safe-area-inset-top)) 14px calc(10px + env(safe-area-inset-bottom));z-index:50}
+#mClose{min-height:44px;min-width:88px;padding:10px 18px;font-size:14px}
+#mClose2{margin-top:8px;width:100%;min-height:48px;font-size:14px;letter-spacing:.15em;
+  border:1px solid var(--line);border-radius:10px;background:var(--panel2);color:var(--ink)}
+#hud{padding-top:calc(4px + env(safe-area-inset-top))}
 .modal.on{display:flex}
 .modal .mhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .modal .mhead h3{font-size:13px;letter-spacing:.25em;color:var(--acc)}
@@ -200,6 +204,8 @@ button.ghost{background:transparent}
 <div class="modal" id="modal">
   <div class="mhead"><h3 id="mTitle">PACK</h3><button class="ghost" id="mClose">Close</button></div>
   <div class="mlist" id="mList"></div>
+  <button id="mClose2">CLOSE</button>
+  
 </div>
 
 <script>
@@ -4101,6 +4107,7 @@ function buildToneDial(){
 el("btnNew").onclick=startCreate;
 el("btnHelp").onclick=openHelp;
 el("mClose").onclick=closeModal;
+el("mClose2").onclick=closeModal;
 el("crBack").onclick=()=>{if(CR.step===0)show("title");else{CR.step--;renderCreate()}};
 el("crNext").onclick=()=>{if(CR.step<2){CR.step++;renderCreate()}else{CR.step=3;show("sheet");renderSheet()}};
 el("crRand").onclick=()=>{

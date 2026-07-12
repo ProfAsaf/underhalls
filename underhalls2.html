@@ -1024,6 +1024,49 @@ function relicSVG(it,sz){
   s+='</svg>';
   return s;
 }
+const AFFIX_TX={
+ "Iron":"+1 to hit.",
+ "Fungal":"+1 armor class.",
+ "Verdigris":"+1 saving throws.",
+ "Brass":"+1 to hit, +1 damage.",
+ "Mithril":"+2 to hit, +1 armor class.",
+ "Vein-Touched":"+2 damage.",
+ "of Slay Undead":"Triple damage against the undead.",
+ "of Slay Trolls":"Triple damage against trollkind.",
+ "of Slay Dragons":"Triple damage against dragonkind.",
+ "of Flame":"Adds 1d6 fire on every hit. Doubles on things weak to fire, nothing on the fireproof.",
+ "of Frost":"Adds 1d5 frost on every hit. Doubles on things weak to cold.",
+ "of Venom":"A chance to poison what you strike.",
+ "of Clarity":"You cannot be blinded.",
+ "of Purity":"You resist poison.",
+ "of Light":"+2 infravision. You see warm-blooded creatures two tiles farther in the dark.",
+ "of the Stratum":"+1 damage per stratum descended. Grows as you go deeper.",
+ "of Ember-Ward":"Resist fire. Fire damage against you is halved.",
+ "of the Cold Seam":"Resist frost. Cold damage against you is halved.",
+ "of Spore-Seal":"Resist spore. Spore damage against you is halved.",
+ "of Grounding":"Resist shock. Lightning damage against you is halved.",
+ "of Keeping":"Resist disenchantment. Your gear's plusses cannot be corroded away.",
+ "of Free Action":"Immune to being stunned, grappled, or knocked down."
+};
+function affixModal(it){
+  openModal("EXAMINE");
+  const L=el("mList");
+  const d=(it.t==="wep"?WEAPONS:it.t==="bow"?BOWS:it.t==="arm"?ARMORS:it.t==="shl"?SHIELDS:null);
+  const base=d?d.n:(it.t==="ring"?"a ring":it.t==="crown"?"a circlet":"an item");
+  const hd=document.createElement("div");hd.className="row";
+  let head="<b>"+itemName(it)+"</b>";
+  if(it.t==="wep"&&d&&d.d)head+='<div class="d">Base '+d.d[0]+"d"+d.d[1]+" damage"+(it.b?", enchanted +"+it.b:"")+".</div>";
+  else if((it.t==="arm"||it.t==="shl")&&d&&typeof d.ac==="number")head+='<div class="d">Base AC '+d.ac+(it.b?", enchanted +"+it.b:"")+".</div>";
+  else if(it.b)head+='<div class="d">Enchanted +'+it.b+".</div>";
+  hd.innerHTML=head;L.appendChild(hd);
+  if(it.pre!==undefined){const pn=PREFIX[it.pre].n;mrow(L,pn,AFFIX_TX[pn]||skillLine(PREFIX[it.pre].b));}
+  if(it.suf!==undefined&&SUFFIX[it.suf]){
+    if(it.sufKnown){const sn=SUFFIX[it.suf].n;mrow(L,sn,AFFIX_TX[sn]||"An effect you have identified.");}
+    else mrow(L,"Unidentified mark",it.t==="arm"||it.t==="shl"?"It feels warm. Take a hit while wearing it to learn what it is.":"It feels eager. Land a blow with it to learn what it is.");
+  }
+  if(it.b)mrow(L,"Enchantment","+"+it.b+(it.t==="wep"||it.t==="bow"?" to hit and damage.":" to armor class."));
+  if(it.pre===undefined&&it.suf===undefined&&!it.b)mrow(L,"Plain","No marks, no enchantment. Honest steel.");
+}
 function openItemModal(it){
   openModal("PROVENANCE");
   const L=el("mList");
@@ -4207,6 +4250,7 @@ function openInv(){
     const mk=(txt,fn)=>{const b=document.createElement("button");b.textContent=txt;
       b.onclick=ev=>{ev.stopPropagation();fn()};a.appendChild(b)};
     if(["wep","bow","arm","shl","ring","crown"].includes(it.t)){
+      if(!it.art)mk("Examine",()=>{affixModal(it)});
       if(eq)mk("Unready",()=>{p.eq[slotOf(it)]=null;
         msg("You stow the "+itemName(it)+".","mg-sys");
         closeModal();endTurn();if(!G.over)openInv()});

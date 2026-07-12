@@ -3031,6 +3031,25 @@ function sizeCanvas(){
   cv.height=st.clientHeight*devicePixelRatio;
   CTX=cv.getContext("2d");
   CTX.scale(devicePixelRatio,devicePixelRatio);
+  CTX.imageSmoothingEnabled=false;
+}
+/* ============ map zoom (pinch) ============ */
+const ZMIN=0.55,ZMAX=3;
+let ZOOM=1;
+try{const z=parseFloat(localStorage.getItem("uh2zoom"));if(z>=ZMIN&&z<=ZMAX)ZOOM=z}catch(e){}
+function setZoom(z){
+  ZOOM=clamp(z,ZMIN,ZMAX);
+  try{localStorage.setItem("uh2zoom",ZOOM.toFixed(3))}catch(e){}
+  if(G)draw();
+}
+function viewGeom(W,H){
+  const base=Math.min(W/29,H/19);
+  const ts=Math.max(6,Math.floor(base*ZOOM));
+  const VW=Math.min(MW,Math.ceil(W/ts)),VH=Math.min(MH,Math.ceil(H/ts));
+  const ox=clamp(G.p.x-Math.floor(VW/2),0,Math.max(0,MW-VW));
+  const oy=clamp(G.p.y-Math.floor(VH/2),0,Math.max(0,MH-VH));
+  const px=Math.floor((W-VW*ts)/2),py=Math.floor((H-VH*ts)/2);
+  return{ts,VW,VH,ox,oy,px,py};
 }
 const TILECOLS=16;
 const TILEIX={"a_chain":0,"a_flak":1,"a_hard_leather":2,"a_plate":3,"a_robe":4,"a_soft_leather":5,"a_spore_weave":6,"a_vein_hide":7,"altar0":8,"altar1":9,"altar2":10,"b_great_bow":11,"b_long_bow":12,"b_revolver":13,"b_rifle":14,"b_short_bow":15,"b_sling":16,"door":17,"down":18,"floor0":19,"floor1":20,"floor2":21,"floor3":22,"floor4":23,"gf_&":24,"gf_?":25,"gf_@":26,"gf_A":27,"gf_B":28,"gf_C":29,"gf_D":30,"gf_E":31,"gf_F":32,"gf_G":33,"gf_J":34,"gf_O":35,"gf_P":36,"gf_S":37,"gf_T":38,"gf_U":39,"gf_V":40,"gf_W":41,"gf_X":42,"gf_a":43,"gf_b":44,"gf_c":45,"gf_d":46,"gf_e":47,"gf_f":48,"gf_g":49,"gf_h":50,"gf_i":51,"gf_k":52,"gf_l":53,"gf_m":54,"gf_o":55,"gf_p":56,"gf_r":57,"gf_s":58,"gf_w":59,"gf_z":60,"it_ammo":61,"it_book":62,"it_crate":63,"it_crate_open":64,"it_crown":65,"it_dev":66,"it_dev_echo":67,"it_dev_mender":68,"it_dev_pinger":69,"it_dev_skipper":70,"it_dev_zapper":71,"it_gold":72,"it_gren":73,"it_meal":74,"it_note":75,"it_part":76,"it_pot":77,"it_pot_clw":78,"it_pot_csw":79,"it_pot_heal":80,"it_pot_pois":81,"it_pot_speed":82,"it_pot_str":83,"it_pot_wit":84,"it_ring":85,"it_scr":86,"it_vial":87,"ly_a_chain":88,"ly_a_flak":89,"ly_a_hard_leather":90,"ly_a_plate":91,"ly_a_robe":92,"ly_a_soft_leather":93,"ly_a_spore_weave":94,"ly_a_vein_hide":95,"ly_b_great_bow":96,"ly_b_long_bow":97,"ly_b_revolver":98,"ly_b_rifle":99,"ly_b_short_bow":100,"ly_b_sling":101,"ly_beard_dwarf":102,"ly_boots":103,"ly_hair_dwarf":104,"ly_hair_foreclosed":105,"ly_hair_gnome":106,"ly_hair_halfelf":107,"ly_hair_halforc":108,"ly_hair_highelf":109,"ly_hair_hobbit":110,"ly_hair_human":111,"ly_hair_revenant":112,"ly_legs":113,"ly_s_large_shield":114,"ly_s_small_shield":115,"ly_s_tower_shield":116,"ly_w_battle_axe":117,"ly_w_dagger":118,"ly_w_flail":119,"ly_w_great_sword":120,"ly_w_long_sword":121,"ly_w_mace":122,"ly_w_pick_axe":123,"ly_w_short_sword":124,"ly_w_trench_blade":125,"ly_w_vein_scythe":126,"ly_w_war_hammer":127,"mn_FOREMAN VEYN":128,"mn_MERIDIAN":129,"mn_MIRROR-YOU":130,"mn_SERAPH-OF-MEAT":131,"mn_THE AUDIT":132,"mn_THE CHOIR BENEATH":133,"mn_THE FIRST TRIGGER":134,"mn_WET ALEPH":135,"mn_archive wisp":136,"mn_arsenal spirit":137,"mn_artery hound":138,"mn_attention mote":139,"mn_balrog spawn":140,"mn_bat swarm":141,"mn_bayonet stalker":142,"mn_bloom cultist":143,"mn_bloom ogre":144,"mn_bloom zombie":145,"mn_bookbinder":146,"mn_brass sentry":147,"mn_brass wasp swarm":148,"mn_cap troll":149,"mn_catalogue ghost":150,"mn_cave spider":151,"mn_chorister of meat":152,"mn_coal imp":153,"mn_collapsed one":154,"mn_cordite elemental":155,"mn_deep eel":156,"mn_drowned knight":157,"mn_drowned scribe":158,"mn_fen witch":159,"mn_feral digger":160,"mn_flak golem":161,"mn_flesh troll":162,"mn_folio mimic":163,"mn_gas bloom":164,"mn_gas wisp":165,"mn_ghost":166,"mn_giant rat":167,"mn_glass golem":168,"mn_gloom moth":169,"mn_hill giant":170,"mn_index serpent":171,"mn_ink elemental":172,"mn_iron golem":173,"mn_jackal":174,"mn_kobold":175,"mn_kobold powder-boy":176,"mn_lamplighter wisp":177,"mn_luminous parasite":178,"mn_marginal horror":179,"mn_mature red dragon":180,"mn_meat angel":181,"mn_memory leech":182,"mn_mine beetle":183,"mn_moss serpent":184,"mn_munitions ogre":185,"mn_mycelial mass":186,"mn_myconid":187,"mn_null chorister":188,"mn_null shade":189,"mn_officer revenant":190,"mn_ogre":191,"mn_orc captain":192,"mn_orc scab":193,"mn_pale librarian":194,"mn_pale stalker":195,"mn_pit viper":196,"mn_powder monkey":197,"mn_pulse mass":198,"mn_quartermaster's hand":199,"mn_red usher":200,"mn_redaction clerk":201,"mn_rifleman husk":202,"mn_rust mite":203,"mn_sapper wight":204,"mn_seraph fragment":205,"mn_shell hound":206,"mn_silverfish swarm":207,"mn_skeleton crew":208,"mn_smoke stranger":209,"mn_sodden wight":210,"mn_spore wolf":211,"mn_sporeling":212,"mn_star-eyed watcher":213,"mn_starlight moth":214,"mn_stone giant":215,"mn_the audience":216,"mn_trench ghoul":217,"mn_troll":218,"mn_tunnel hound":219,"mn_turret crab":220,"mn_vampire":221,"mn_vein crawler":222,"mn_vein dragonet":223,"mn_vein giant":224,"mn_vein wyrm":225,"mn_vellum swarm":226,"mn_violet drifter":227,"mn_water weird":228,"mn_whistlecap":229,"mn_worm mass":230,"mn_young red dragon":231,"odoor":232,"pc_HOLLOW CROWN":233,"pc_TRUE TROLL":234,"pc_WYRM":235,"pc_drakeling":236,"pc_dunadan":237,"pc_dwarf":238,"pc_foreclosed":239,"pc_ghul":240,"pc_gnome":241,"pc_halfelf":242,"pc_halforc":243,"pc_halftroll":244,"pc_highelf":245,"pc_hobbit":246,"pc_human":247,"pc_kobold":248,"pc_revenant":249,"rubble":250,"s_large_shield":251,"s_small_shield":252,"s_tower_shield":253,"up":254,"vein":255,"w_battle_axe":256,"w_dagger":257,"w_flail":258,"w_great_sword":259,"w_long_sword":260,"w_mace":261,"w_pick_axe":262,"w_short_sword":263,"w_trench_blade":264,"w_vein_scythe":265,"w_war_hammer":266,"wall0":267,"wall1":268,"wall2":269,"wall3":270,"wall4":271};
@@ -3174,11 +3193,8 @@ function draw(){
   if(!G||!CTX)return;
   const st=el("stage"),W=st.clientWidth,H=st.clientHeight;
   CTX.fillStyle="#000";CTX.fillRect(0,0,W,H);
-  const VW=29,VH=19;
-  const ts=Math.floor(Math.min(W/VW,H/VH));
+  const {ts,VW,VH,ox,oy,px,py}=viewGeom(W,H);
   const p=G.p;
-  let ox=clamp(p.x-Math.floor(VW/2),0,MW-VW),oy=clamp(p.y-Math.floor(VH/2),0,MH-VH);
-  const px=Math.floor((W-VW*ts)/2),py=Math.floor((H-VH*ts)/2);
   CTX.font=(ts-2)+"px ui-monospace,Menlo,monospace";
   CTX.textAlign="center";CTX.textBaseline="middle";
   for(let y=0;y<VH;y++)for(let x=0;x<VW;x++){
@@ -3454,9 +3470,7 @@ function canvasTap(e){
   if(LPS){LPS=false;return}
   if(!G||G.over)return;
   const st=el("stage"),W=st.clientWidth,H=st.clientHeight;
-  const VW=29,VH=19,ts=Math.floor(Math.min(W/VW,H/VH));
-  const ox=clamp(G.p.x-Math.floor(VW/2),0,MW-VW),oy=clamp(G.p.y-Math.floor(VH/2),0,MH-VH);
-  const px=Math.floor((W-VW*ts)/2),py=Math.floor((H-VH*ts)/2);
+  const {ts,ox,oy,px,py}=viewGeom(W,H);
   const r=el("cv").getBoundingClientRect();
   const sxp=e.clientX-r.left,syp=e.clientY-r.top;
   if(sxp>=MM.x&&sxp<=MM.x+MM.w&&syp>=MM.y&&syp<=MM.y+MM.h){G.miniOff=!G.miniOff;draw();return}
@@ -3692,6 +3706,11 @@ function openHelp(){
     paint();
     r.onclick=()=>{TILE_ON=!TILE_ON;try{localStorage.setItem("uh2tiles",TILE_ON?"1":"0")}catch(e){};paint();if(G)renderAll()};
     L0.appendChild(r);
+    const zr=document.createElement("div");zr.className="row";
+    const zpaint=()=>{zr.innerHTML="<b>Map zoom: "+Math.round(ZOOM*100)+"%</b>"+'<div class="d">Pinch the map with two fingers to zoom. Tap here to reset to 100%.</div>'};
+    zpaint();
+    zr.onclick=()=>{setZoom(1);zpaint()};
+    L0.appendChild(zr);
   }
   const rows=[
    ["Move","Tap adjacent tiles or use the pad. Tap far tiles to autowalk. Diagonals matter."],
@@ -4133,9 +4152,7 @@ el("hudPools").addEventListener("click",e=>{
 let LPT=null,LPS=false;
 function inspectAtClient(cx,cy){
   const st=el("stage"),W=st.clientWidth,H=st.clientHeight;
-  const VW=29,VH=19,ts=Math.floor(Math.min(W/VW,H/VH));
-  const ox=clamp(G.p.x-Math.floor(VW/2),0,MW-VW),oy=clamp(G.p.y-Math.floor(VH/2),0,MH-VH);
-  const px=Math.floor((W-VW*ts)/2),py=Math.floor((H-VH*ts)/2);
+  const {ts,ox,oy,px,py}=viewGeom(W,H);
   const r=el("cv").getBoundingClientRect();
   const mx=cx-r.left,my=cy-r.top;
   if(mx>=MM.x&&mx<=MM.x+MM.w&&my>=MM.y&&my<=MM.y+MM.h)return;
@@ -4143,15 +4160,50 @@ function inspectAtClient(cx,cy){
   if(tx<0||ty<0||tx>=MW||ty>=MH)return;
   inspectTile(tx,ty);
 }
+let PINCH=null,PRAF=0;
+function tDist(e){const a=e.touches[0],b=e.touches[1];return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)}
 el("cv").addEventListener("touchstart",e=>{
   if(!G||G.over)return;
+  if(e.touches.length>=2){
+    e.preventDefault();
+    if(LPT)clearTimeout(LPT);
+    LPS=true;
+    PINCH={d0:tDist(e),z0:ZOOM};
+    return;
+  }
   const t=e.touches[0];LPS=false;
   LPT=setTimeout(()=>{LPS=true;inspectAtClient(t.clientX,t.clientY)},450);
-},{passive:true});
-el("cv").addEventListener("touchmove",()=>{if(LPT)clearTimeout(LPT)},{passive:true});
+},{passive:false});
+el("cv").addEventListener("touchmove",e=>{
+  if(PINCH&&e.touches.length>=2){
+    e.preventDefault();
+    const z=clamp(PINCH.z0*tDist(e)/PINCH.d0,ZMIN,ZMAX);
+    if(Math.abs(z-ZOOM)>0.001){
+      ZOOM=z;
+      if(!PRAF)PRAF=requestAnimationFrame(()=>{PRAF=0;if(G)draw()});
+    }
+    return;
+  }
+  if(LPT)clearTimeout(LPT);
+},{passive:false});
 el("cv").addEventListener("touchend",e=>{
   if(LPT)clearTimeout(LPT);
+  if(PINCH){
+    if(e.touches.length<2){
+      PINCH=null;
+      try{localStorage.setItem("uh2zoom",ZOOM.toFixed(3))}catch(err){}
+      LPS=true;
+    }
+    e.preventDefault();
+    return;
+  }
   if(LPS)e.preventDefault();
+},{passive:false});
+el("cv").addEventListener("wheel",e=>{
+  if(!G||G.over)return;
+  e.preventDefault();
+  const f=e.ctrlKey?0.01:0.0018;
+  setZoom(ZOOM*Math.exp(-e.deltaY*f));
 },{passive:false});
 el("cv").addEventListener("contextmenu",e=>{
   e.preventDefault();

@@ -4128,7 +4128,7 @@ function choiceModal(title,opts){
     const r=document.createElement("div");
     r.className="row pickable";
     r.innerHTML="<b>"+o.label+"</b>"+(o.desc?'<div class="d">'+o.desc+"</div>":"");
-    r.onclick=o.fn;
+    r.onclick=()=>{closeModal();if(o.fn)o.fn()};
     L.appendChild(r);
   }
 }

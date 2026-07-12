@@ -3003,13 +3003,6 @@ function buildForkChoice(pool,tier){
 }
 /* ============ renderer ============ */
 let CTX=null,PAL=null,MM={x:-99,y:-99,w:0,h:0};
-function viewGeom(){
-  const st=el("stage"),W=st.clientWidth,H=st.clientHeight;
-  const VW=29,VH=19,ts=Math.floor(Math.min(W/VW,H/VH));
-  const ox=clamp(G.p.x-Math.floor(VW/2),0,MW-VW),oy=clamp(G.p.y-Math.floor(VH/2),0,MH-VH);
-  const px=Math.floor((W-VW*ts)/2),py=Math.floor((H-VH*ts)/2);
-  return{W,H,VW,VH,ts,ox,oy,px,py};
-}
 function dmgFloat(x,y,txt,cls){
   if(!G)return;
   const g=viewGeom();
@@ -3046,9 +3039,11 @@ function setZoom(z){
 }
 let PANX=0,PANY=0,PLAST=null;
 function viewGeom(W,H){
+  if(W===undefined){const st=el("stage");W=st.clientWidth;H=st.clientHeight}
   const base=Math.min(W/29,H/19);
   const ts=Math.max(6,Math.floor(base*ZOOM));
   const p=G.p;
+  if(!isFinite(PANX)||!isFinite(PANY)){PANX=0;PANY=0}
   if(!PLAST||PLAST.x!==p.x||PLAST.y!==p.y){PLAST={x:p.x,y:p.y};PANX=0;PANY=0}
   const fitW=W/ts,fitH=H/ts;
   let ox,oy,px,py,VW,VH;
@@ -3066,7 +3061,7 @@ function viewGeom(W,H){
     oy=Math.floor(cy);py=-Math.round((cy-oy)*ts);
     VH=Math.min(MH-oy,Math.ceil(fitH)+1);
   }
-  return{ts,VW,VH,ox,oy,px,py};
+  return{W,H,ts,VW,VH,ox,oy,px,py};
 }
 function panBy(dx,dy){
   const st=el("stage"),W=st.clientWidth,H=st.clientHeight;

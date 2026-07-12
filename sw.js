@@ -1,6 +1,6 @@
-/* UNDERHALLS offline worker. Update workflow: bump CACHE, commit, push. */
-const CACHE="uh2-v1";
-const SEED=["./","./index.html","./underhalls2.html"];
+/* UNDERHALLS offline worker. Update workflow: bump CACHE, commit, push, then open online once and relaunch. */
+const CACHE="uh2-v2";
+const SEED=["./","./index.html"];
 self.addEventListener("install",e=>{
   e.waitUntil(
     caches.open(CACHE).then(c=>
@@ -19,15 +19,9 @@ self.addEventListener("fetch",e=>{
   const u=new URL(e.request.url);
   if(u.origin!==location.origin)return;
   e.respondWith(
-    caches.match(e.request,{ignoreSearch:true}).then(hit=>{
-      if(hit)return hit;
-      return fetch(e.request).then(res=>{
-        if(res&&res.ok){
-          const cp=res.clone();
-          caches.open(CACHE).then(c=>c.put(e.request,cp));
-        }
-        return res;
-      });
-    })
+    fetch(e.request).then(res=>{
+      if(res&&res.ok){const cp=res.clone();caches.open(CACHE).then(c=>c.put(e.request,cp));}
+      return res;
+    }).catch(()=>caches.match(e.request,{ignoreSearch:true}).then(hit=>hit||caches.match("./index.html")))
   );
 });

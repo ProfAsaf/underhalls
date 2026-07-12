@@ -4894,6 +4894,10 @@ el("btnSlots").onclick=openSlots;
 refreshContinue();
 el("cv").addEventListener("click",canvasTap);
 window.addEventListener("resize",()=>{if(G){sizeCanvas();draw()}});
+try{
+  if("serviceWorker" in navigator&&location.protocol==="https:")
+    navigator.serviceWorker.register("sw.js").catch(()=>{});
+}catch(e){}
 buildDpad();
 buildToneDial();
 </script>

@@ -1069,6 +1069,7 @@ function itemBonus(it,key){
 }
 function itemName(it){
   if(it.t==="wep"||it.t==="bow"){const d=(it.t==="wep"?WEAPONS:BOWS)[it.k];
+    if(!d)return it.art||"a strange implement";
     if(it.art)return it.art;
     let nm=(it.pre!==undefined?PREFIX[it.pre].n+" ":"")+d.n;
     if(it.suf!==undefined)nm+=it.sufKnown?" "+SUFFIX[it.suf].n:" (it feels eager)";
@@ -1076,6 +1077,7 @@ function itemName(it){
     if(d.gun)nm+=" ["+(it.ammo||0)+" rds]";
     return nm}
   if(it.t==="arm"||it.t==="shl"){const d=(it.t==="arm"?ARMORS:SHIELDS)[it.k];
+    if(!d)return it.art||"a strange garment";
     if(it.art)return it.art+" [AC "+(d.ac+(it.b||0))+"]";
     let nm=(it.pre!==undefined?PREFIX[it.pre].n+" ":"")+d.n;
     if(it.suf!==undefined)nm+=it.sufKnown?" "+SUFFIX[it.suf].n:" (it feels warm)";
@@ -1148,9 +1150,10 @@ function openCrate(it){
   const tier=it.tier;let got=[];
   const push=x=>{if(x)got.push(x)};
   if(tier<=0){push({t:"pot",k:pick(["clw","clw","csw"])});if(Math.random()<.5)push({t:"scr",k:pick(Object.keys(SCROLLS))})}
-  else if(tier===1){push(mkGear(pick([WEAPONS,ARMORS]),Math.random()<.5?"wep":"arm",G.depth+2));push({t:"pot",k:"csw"})}
+  else if(tier===1){const gt=Math.random()<.5?"wep":"arm";push(mkGear(gt==="wep"?WEAPONS:ARMORS,gt,G.depth+2));push({t:"pot",k:"csw"})}
   else if(tier===2){if(Math.random()<.3)push({t:"vial",r:clamp(stratumIdx(G.depth)+3,2,9)});
-    push(Math.random()<.3?genRelic(G.depth):mkGear(pick([WEAPONS,BOWS,ARMORS]),pick(["wep","bow","arm"]),G.depth+3));
+    const gt2=pick(["wep","bow","arm"]);
+    push(Math.random()<.3?genRelic(G.depth):mkGear(gt2==="wep"?WEAPONS:gt2==="bow"?BOWS:ARMORS,gt2,G.depth+3));
     push({t:"dev",k:pick(Object.keys(DEVICES)),ch:ri(3,6)})}
   else if(tier===3){push(tryArtifact(G.depth+4)||genRelic(G.depth+3));push({t:"vial",r:clamp(stratumIdx(G.depth)+4,2,9)});push({t:"pot",k:"heal"})}
   else{const a=tryArtifact(20);push(a||genRelic(20));push({t:"vial",r:9});push({t:"pot",k:"heal"});push({t:"pot",k:"str"})}
@@ -4175,6 +4178,7 @@ function openInv(){
   reps.sort((A,B)=>secOf(A)-secOf(B)||itemName(A.it).localeCompare(itemName(B.it)));
   let lastSec=-1;
   for(const rep of reps){
+   try{
     const it=rep.it;
     const sec=secOf(rep);
     if(sec!==lastSec){lastSec=sec;
@@ -4227,6 +4231,12 @@ function openInv(){
       msg("You drop "+aName(it)+".","mg-sys");closeModal();endTurn()});
     if(it.art)r.lastChild.appendChild(a);else r.appendChild(a);
     L.appendChild(r);
+   }catch(err){
+    const r=document.createElement("div");r.className="row";
+    r.innerHTML="<b>"+itemName(rep.it)+"</b><div class='d'>Malformed. Tap to drop.</div>";
+    r.onclick=()=>{const ix=p.inv.indexOf(rep.it);if(ix>=0)p.inv.splice(ix,1);closeModal();if(!G.over)openInv()};
+    L.appendChild(r);
+   }
   }
 }
 function openCast(){

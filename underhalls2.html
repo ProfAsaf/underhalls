@@ -159,6 +159,7 @@ button.ghost{background:transparent}
   <button class="primary" id="btnNew" style="min-width:210px">Roll a character</button>
   <button class="ghost" id="btnHelp" style="min-width:210px;color:var(--dim)">How to play</button>
   <button class="ghost" id="btnSlots" style="min-width:210px;color:var(--faint);font-size:12px">Save slots</button>
+  <button class="ghost" id="btnBoard" style="min-width:210px;color:var(--faint);font-size:12px">The Record</button>
   <button class="ghost" id="btnSaveCode" style="min-width:210px;color:var(--faint);font-size:12px">Save code</button>
   <div id="toneRow"><span>Watcher</span><span id="toneDots"></span><span id="toneLbl"></span></div>
   <div id="metaLine" style="font-size:10px;color:var(--faint)"></div>
@@ -369,10 +370,10 @@ const RACES=[
  abtx:"Company property. Staff pricing, everywhere, always.",
  blurb:"Repossessed at birth. The badge is under the skin. So is the interest."},
 {id:"drakeling",name:"Drakeling",mods:[1,1,-1,0,1],hd:10,xp:130,infra:3,ab:{rFire:1},
- abtx:"Cold blood, patient lungs. Something is folded up inside.",
+ abtx:"Cold blood, patient lungs. Something is folded up inside. Fire slides off.",
  blurb:"Sold to the Company as lizardkin labor. The paperwork was wrong."},
 {id:"revenant",name:"Revenant",mods:[1,0,1,0,-2],hd:9,xp:95,infra:4,ab:{rPois:1,noBlind:1,seeInv:1,rFrost:1},
- abtx:"Poison-proof, blind-proof, sees the unseen. Regenerates slowly, if at all.",
+ abtx:"Poison-proof, blind-proof, cold-proof, sees the unseen. Regenerates slowly, if at all.",
  blurb:"You have done this before. You do not remember finishing.",hidden:1,noRegen:1}];
 
 /* ============ spells ============ */
@@ -667,9 +668,9 @@ function noteFor(depth){
   return un.length?un[0]:null;
 }
 function readNote(it){
-  const p=G.p,N=NOTES[it.id];
+  const p=G.p,N=it.tx||NOTES[it.id];
   removeInv(it);
-  p.found[it.id]=1;
+  if(it.id!==undefined)p.found[it.id]=1;
   tag("scribe",Math.floor(6*stratumMult(G.depth)));
   openModal("THE PAPER TRAIL");
   const L=el("mList");
@@ -811,13 +812,13 @@ const PREFIX=[
  {n:"Brass",b:{hit:1,dmg:1},minD:13},{n:"Mithril",b:{hit:2,ac:1},minD:15},{n:"Vein-Touched",b:{dmg:2},minD:17}];
 const SUFFIX=[
  {n:"of Slay Undead",slay:"undead",minD:3},{n:"of Slay Trolls",slay:"trollish",minD:6},
- {n:"of Slay Dragons",slay:"dragon",minD:12},{n:"of Flame",brand:[1,6],minD:8},
- {n:"of Frost",brand:[1,5],minD:6},{n:"of Venom",venom:1,minD:5},
+ {n:"of Slay Dragons",slay:"dragon",minD:12},{n:"of Flame",brand:[1,6],el:"fire",minD:8},
+ {n:"of Frost",brand:[1,5],el:"frost",minD:6},{n:"of Venom",venom:1,minD:5},
  {n:"of Clarity",noBlind:1,minD:4},{n:"of Purity",rPois:1,minD:4},
  {n:"of Light",infra:2,minD:2},{n:"of the Stratum",stratb:1,minD:5},
  {n:"of Ember-Ward",res:"rFire",minD:6},{n:"of the Cold Seam",res:"rFrost",minD:8},
  {n:"of Spore-Seal",res:"rSpore",minD:7},{n:"of Grounding",res:"rShock",minD:9},
- {n:"of Keeping",res:"rDisen",minD:5}];
+ {n:"of Keeping",res:"rDisen",minD:5},{n:"of Free Action",res:"freeAct",minD:7}];
 const POTIONS={
  clw:{n:"Cure Light Wounds"},csw:{n:"Cure Serious Wounds"},heal:{n:"Healing"},
  str:{n:"Strength"},speed:{n:"Speed"},pois:{n:"Poison"},wit:{n:"Clear Thought"}};
@@ -889,7 +890,7 @@ const RMODS=[
  {n:"Ember-Warded",x:{rFire:1},w:1},{n:"Cold-Blooded",x:{rFrost:1},w:1},
  {n:"Spore-Sealed",x:{rSpore:1},w:1},{n:"Grounded",x:{rShock:1},w:1},
  {n:"Even-Keeled",x:{rConf:1},w:1},{n:"Word-Fast",x:{rNull:1},w:1},
- {n:"Deep-Rooted",x:{anchor:40},w:1},{n:"Keeper's",x:{rDisen:1},w:1},
+ {n:"Deep-Rooted",x:{anchor:40},w:1},{n:"Keeper's",x:{rDisen:1},w:1},{n:"Unfettered",x:{freeAct:1},w:1},
  {n:"Courier's",x:{spd:3},ring:1,w:1},
  {n:"Quicksilver",x:{spd:5},ring:1,w:1},
  {n:"Signet of the Company",beh:{k:"discount",v:20},ring:1,d:"the Store charges staff rates",w:1},
@@ -1087,7 +1088,7 @@ function itemName(it){
   if(it.t==="part")return capz(it.of)+" part";
   if(it.t==="gren")return"grenade";
   if(it.t==="meal")return"field ration";
-  if(it.t==="note")return'"'+NOTES[it.id].t+'" (paper)';
+  if(it.t==="note")return'"'+(it.tx?it.tx.t:NOTES[it.id].t)+'" (paper)';
   if(it.t==="ammo")return"ammunition ("+it.v+" rds)";
   if(it.t==="dev")return DEVICES[it.k].n+" ["+it.ch+"]";
   if(it.t==="gem")return"rough gem ("+it.v+"g)";
@@ -1428,6 +1429,27 @@ function tameTry(it){
   }
   endTurn();
 }
+function godGold(gv){const p=G.p;
+  if(p.god===0){gv=Math.ceil(gv*1.15);p.godG=(p.godG||0)+gv;
+    while(p.godG>=150){p.godG-=150;p.piety=(p.piety||0)+1}}
+  return gv}
+function prayAt(kind){
+  const p=G.p,nm=ALTARS[kind].n,pi=p.piety||0;
+  const ready1=pi>=3&&p.turn>=(p.godCd1||0),ready2=pi>=8&&p.turn>=(p.godCd2||0);
+  if(ready2){p.godCd2=p.turn+300;
+    if(kind===0){let hit=0;for(const m of G.mons.slice()){if(m.ally||!monSeen(m))continue;hit++;damageMon(m,dice(4,6),p.org.id)}
+      announce(nm+" terminates "+hit+" contracts.","watch",true)}
+    else if(kind===1){teleportPlayer(8);announce(nm+" moves you like a decimal point.","watch",true)}
+    else{let br=0;for(const m of G.mons)if(!m.ally&&monSeen(m)&&!fearless(m)&&!(m.afraid>0)){m.afraid=ri(8,14);br++}
+      announce("The Chorus lands. "+br+" nerves give out.","watch",true)}
+    return}
+  if(ready1){p.godCd1=p.turn+150;
+    if(kind===0){p.status.shield=Math.max(p.status.shield||0,ri(15,25));msg("A shield of good standing.","mg-good")}
+    else if(kind===1){p.hp=Math.min(p.mhp,p.hp+Math.floor(p.mhp*.35));msg("The Pulse takes your side.","mg-good")}
+    else{p.status.haste=Math.max(p.status.haste||0,ri(10,15));msg("The Hymn carries you.","mg-good")}
+    return}
+  msg("Devotion: "+pi+". "+(pi<3?"It wants more.":"Its gifts are resting."),"mg-sys");
+}
 function openAltar(x,y){
   const p=G.p,kind=G.altars[x+","+y]===undefined?0:G.altars[x+","+y],A=ALTARS[kind];
   const done=()=>{G.map[y][x]=T_FLOOR;delete G.altars[x+","+y];closeModal();endTurn()};
@@ -1448,6 +1470,18 @@ function openAltar(x,y){
     for(const m of G.mons)if(!m.ally&&!m.def.fl.boss&&!m.def.fl.heart&&!m.def.fl.audit){m.asleep=true;m.aware=false}
     G.bellDebt=1;stain(1,null);
     announce("Silence, wall to wall. Below you, something opens one eye.","watch",true);done()}});
+  if(p.god===undefined||p.god===null){
+    opts.push({label:"Pledge yourself",desc:"Take the mark. Keep it fed.",fn:()=>{
+      p.god=kind;p.piety=0;
+      announce("You kneel. "+A.n+" takes notice, and keeps taking.","watch",true);
+      closeModal();endTurn()}});
+  }else if(p.god===kind){
+    opts.push({label:"Pray",desc:"Devotion "+(p.piety||0)+". Boons wake at 3 and 8.",fn:()=>{
+      prayAt(kind);closeModal();endTurn()}});
+  }else{
+    opts.push({label:"Pray",desc:"(Not yours.)",fn:()=>{
+      msg(A.n+" does not answer strangers.","mg-sys");closeModal()}});
+  }
   opts.push({label:"Leave it",desc:"Some furniture is a question.",fn:()=>closeModal()});
   choiceModal(A.n+" · "+A.d,opts);
 }
@@ -1512,17 +1546,78 @@ const UNIQ=[
 let G=null;
 const MW=62,MH=38;
 const T_WALL=0,T_FLOOR=1,T_DOOR=2,T_ODOOR=3,T_DOWN=4,T_UP=5,T_VEIN=6,T_RUBBLE=7,T_ALTAR=8;
+const NAME_A=["Marrow","Brass","Odum","Sela","Corvane","Ash","Petra","Halix","Verne","Dole","Mirren","Cassit","Rook","Ilsa","Fenn","Garrow","Tamsin","Ori","Ludd","Vesta","Quill","Harrow","Neave","Sorel","Bram","Edda","Kell","Juno","Wick","Thessaly"];
+const NAME_B=["Underhill","Coalwright","Stray","Ledgerman","Duskfoot","Ninefingers","Ostler","Vane","Bellwether","Craghold","Tallow","Redseam","Mattock","Lowe","Pyrite","Slate","Gantry","Cinderfell","Moss","Halloway","Furlong","Brinepool","Cages","Winch","Docket","Farrow","Sump","Kettle","Grubb","Lampley"];
+function genName(){
+  const used={};
+  try{const b=JSON.parse(lsGet("uh2board")||"[]");for(const e of b)used[e.n]=1}catch(e){}
+  for(let i=0;i<24;i++){
+    const nm=pick(NAME_A)+" "+pick(NAME_B);
+    if(!used[nm])return nm;
+  }
+  return pick(NAME_A)+" "+pick(NAME_B)+" "+pick(["II","III","IV","V"]);
+}
+function recordBoard(won,cause){
+  try{
+    const p=G.p;
+    const orgs=activePools().map(id=>(p.pools[id].fork||(POOLS[id]?POOLS[id].n:id))+" "+p.pools[id].lvl).join(" \u00b7 ");
+    const e={n:p.name||"UNNAMED",race:p.race.name,org:orgs,depth:p.maxDepth||G.depth,gold:p.gold,kills:p.kills,
+      turns:p.turn,won:!!won,cause:cause||"",god:(p.god===undefined?null:p.god),
+      arts:(G.artsOut||[]).slice(),prt:Object.keys(p.prtSeen||{}).length,when:Date.now()};
+    let b=[];try{b=JSON.parse(lsGet("uh2board")||"[]")}catch(x){}
+    b.push(e);
+    b.sort((A,B)=>(B.won-A.won)||(B.depth-A.depth)||(B.kills-A.kills)||(B.gold-A.gold));
+    b=b.slice(0,10);
+    lsSet("uh2board",JSON.stringify(b));
+  }catch(x){}
+}
+function openBoard(){
+  openModal("THE RECORD OF DESCENTS");
+  const L=el("mList");
+  let b=[];try{b=JSON.parse(lsGet("uh2board")||"[]")}catch(e){}
+  if(!b.length){mrow(L,"No descents on file","Die memorably and the Record will open a page.");return}
+  mrow(L,"Ten pages, ranked","Victories first, then depth. Tap a page to read it.");
+  b.forEach((e,i)=>{
+    const r=document.createElement("div");r.className="row";
+    r.innerHTML="<b>#"+(i+1)+" "+e.n+(e.won?" \u2605":"")+"</b>"+
+      '<div class="d">'+e.race+" \u00b7 "+(e.depth*50)+" ft \u00b7 "+e.kills+" kills \u00b7 "+agoStr(e.when)+"</div>";
+    r.onclick=()=>boardDetail(i);
+    L.appendChild(r);
+  });
+}
+function boardDetail(i){
+  let b=[];try{b=JSON.parse(lsGet("uh2board")||"[]")}catch(e){}
+  const e=b[i];if(!e){openBoard();return}
+  openModal(e.n+(e.won?" \u2605":""));
+  const L=el("mList");
+  mrow(L,"The line",e.race+(e.org?" \u00b7 "+e.org:""));
+  mrow(L,e.won?"Ascended":"Unmade",(e.cause?(e.won?"by way of ":"by ")+e.cause+", ":"")+"at "+(e.depth*50)+" feet");
+  mrow(L,"Holdings",e.gold+" gold \u00b7 "+e.kills+" kills \u00b7 "+e.turns+" turns");
+  if(e.god!==null&&e.god!==undefined&&ALTARS[e.god])mrow(L,"Sworn to",ALTARS[e.god].n);
+  if(e.arts&&e.arts.length)mrow(L,"Named finds",e.arts.join(", "));
+  if(e.prt)mrow(L,"PRT contacts",e.prt+" filed");
+  mrow(L,"Filed",agoStr(e.when));
+  const r=document.createElement("div");r.className="row";
+  r.innerHTML="<b>\u2190 Back to the Record</b>";
+  r.onclick=openBoard;
+  L.appendChild(r);
+}
 function newGame(race,org,rolls,diffI){
   const DF=DIFFS[diffI===undefined?1:diffI];
   const p={race,org,st:rolls.slice(),gold:0,kills:0,turn:0,
     inv:[],eq:{w:null,b:null,a:null,s:null,r1:null,r2:null,c:null},
     status:{pois:0,blind:0,bless:0,haste:0,shield:0,wellfed:0,rage:0,ghost:0,brand:0,veil:0,form:0,nul:0,migraine:0,winded:0},
     shard:null,triggered:false,en:0,maxDepth:1,
-    pools:{},unb:{},batch:new Set(),killCt:{},
+    name:genName(),pools:{},unb:{},batch:new Set(),killCt:{},
     ct:{dig:0,cook:0,host:0,quaffRow:0,scrKinds:{},strat:{},thresholdBlocks:0}};
   for(let i=0;i<5;i++)p.st[i]=clamp(p.st[i]+race.mods[i]+org.mods[i],3,20);
   p.found={};p.codex=[];
-  G={p,depth:1,msgs:[],over:false,won:false,ach:{},artsOut:[],uniqDead:{},balrogDead:false,crew:null,
+  p.bg=pick(BACKS);p.gold+=p.bg.gold;
+  setTimeout(()=>{try{
+    announce("The Watcher opens a file: "+p.name+". Formerly "+p.bg.n+".","watch",true);
+    announce("Outstanding: "+p.bg.debt,"watch",true);
+  }catch(e){}},600);
+  G={p,depth:1,msgs:[],over:false,won:false,ach:{},artsOut:[],uniqDead:{},balrogDead:false,crew:null,reading:null,visitStage:0,
     threshold:null,forkQueue:[],ambient:{},wallHp:{},hostedHere:false,tookDmgThisFloor:false,explored80:false,
     diffI:(diffI===undefined?1:diffI),diff:DF,relicNames:{},robbed:false,altars:{},bellDebt:0,
     stain:0,recallT:0,stained1:0};
@@ -1637,15 +1732,18 @@ function grantSkill(pool){
   gainSk(pool,s.n,s.b);
   announce("Skill: "+s.n+" obtained."+(s.keytx?" "+s.keytx:""),"watch");
 }
-function resFor(key){return (G.p.race.ab[key]||0)+bonus(key)}
+function resFor(key){let v=(G.p.race.ab[key]||0)+bonus(key);
+  if(G.p.bg&&G.p.bg.ab[key])v+=G.p.bg.ab[key];
+  if(G.p.god===2&&(key==="rConf"||key==="rNull"))v+=1;
+  return v}
 function elDmg(dmg,el){
   const r=resFor("r"+el[0].toUpperCase()+el.slice(1));
   if(r>=2)return{d:Math.max(1,Math.ceil(dmg/3)),t:" (resisted well)"};
   if(r>=1)return{d:Math.max(1,Math.ceil(dmg/2)),t:" (resisted)"};
   return{d:dmg,t:""};
 }
-function anchorPct(){return Math.min(95,(behv("anchor")||0)+resFor("anchor"))}
-const COVCH=[["rFire","Fire"],["rFrost","Frost"],["rSpore","Spore"],["rShock","Shock"],["rPois","Poison"],["rConf","Clarity"],["noBlind","Eyes"],["seeInv","Veil-sight"],["rNull","Null"],["rDisen","Keeping"]];
+function anchorPct(){return Math.min(95,(behv("anchor")||0)+resFor("anchor")+(G.p&&G.p.god===1?25:0))}
+const COVCH=[["rFire","Fire"],["rFrost","Frost"],["rSpore","Spore"],["rShock","Shock"],["rPois","Poison"],["rConf","Clarity"],["noBlind","Eyes"],["seeInv","Veil-sight"],["rNull","Null"],["rDisen","Keeping"],["freeAct","Free action"]];
 function covStr(){
   const out=[];
   for(const[k,n]of COVCH){
@@ -1812,7 +1910,8 @@ function genLevel(depth,first){
   G.hostedHere=false;G.tookDmgThisFloor=false;G.explored80=false;
   G.veinsTotal=veins;G.veinsDug=0;
   G.floorTurns=0;G.nextAudit=0;G.supHint=0;
-  if(G.p)G.p.maxDepth=Math.max(G.p.maxDepth||1,depth);
+  if(G.p){const om=G.p.maxDepth||1;G.p.maxDepth=Math.max(om,depth);
+    if(G.p.god===1&&G.p.maxDepth>om)G.p.piety=(G.p.piety||0)+1;}
   if(depth===24){
     const hm=spawnMon({g:"V",c:"#ff9ab0",n:"THE VEIN",hp:[40,10],ac:14,sk:16,dmg:[3,9],sp:1,
       xp:5000,d:[24,24],fl:{heart:1,noSleep:1}},cx(endR),cy(endR));
@@ -1833,14 +1932,19 @@ function genLevel(depth,first){
     const n=6+Math.floor(depth*1.1);
     for(let i=0;i<n;i++)spawnRandom(pickMon(depth),startR);
     const u=UNIQ.find(u=>u.depth===depth&&!G.uniqDead[u.def.n]);
-    if(u){const s=freeSpot(startR);if(s){spawnMon(u.def,s.x,s.y);
-      announce(u.def.n+" is here. "+u.line,"watch",true)}}
+    if(u){const s=freeSpot(startR);if(s){
+      const grudged=G.reading&&G.reading.grudge===u.def.n;
+      const ud=grudged?Object.assign({},u.def,{hp:[u.def.hp[0]+3,u.def.hp[1]],sk:u.def.sk+2}):u.def;
+      const um=spawnMon(ud,s.x,s.y);
+      if(grudged)um.grudge=1;
+      announce(u.def.n+" is here. "+u.line+(grudged?" It has your name in writing.":""),"watch",true)}}
     if(depth>=3&&Math.random()<(G.diff.up?0.35:0.22)){
       const gs=freeSpot(startR);
       if(gs){spawnMon(genNamed(depth),gs.x,gs.y);
         const gd=G.mons[G.mons.length-1].def;
         announce(gd.n+". "+pick(["It has opinions about you.","The Watcher sits up.","Local. Unlisted.","It was somebody's, once."]),"watch",true);}
     }
+    G.pitTheme=null;G.vaultHere=false;
     if(depth>=4&&rooms.length>4&&Math.random()<.12){
       const pr=pick(rooms.filter(r=>r!==startR&&r!==endR));
       let th=null;
@@ -1853,6 +1957,7 @@ function genLevel(depth,first){
             const pm=spawnMon(th,xx,yy);if(!th.fl.noSleep)pm.asleep=true;placed++}}
         for(let i=0;i<2;i++){const xx=pr.x+ri(0,pr.w-1),yy=pr.y+ri(0,pr.h-1);
           if(G.map[yy][xx]===T_FLOOR)G.items.push({x:xx,y:yy,it:randItem(depth+1)})}
+        if(placed>=3)G.pitTheme=th.n;
       }
     }
     if(depth>=6&&rooms.length>4&&Math.random()<.08){
@@ -1861,13 +1966,84 @@ function genLevel(depth,first){
         G.items.push({x:vx,y:vy,it:{t:"crate",tier:clamp(2+(depth>=12?1:0)+(depth>=18?1:0),0,4)}});
         for(let i=0;i<3;i++){const xx=vr.x+ri(0,vr.w-1),yy=vr.y+ri(0,vr.h-1);
           if(G.map[yy][xx]===T_FLOOR&&!monAt(xx,yy)&&!(xx===vx&&yy===vy))spawnMon(pickMon(Math.min(23,depth+3)),xx,yy)}
+        G.vaultHere=true;
         announce("Something on this floor is under guard.","watch",true);
       }
     }
-    if(!G.crew&&depth>=15&&(depth>=17||Math.random()<.3)){
-      G.crew={alive:CREW.map(c2=>c2.n),eta:25+ri(0,15),done:false};
-      announce("Four files travel together now. They have your floor number.","watch",true);
-    }else if(G.crew&&!G.crew.done&&G.crew.alive.length){G.crew.eta=45+ri(0,40)}
+    if(!G.reading)buildReading();
+    if(G.reading&&!G.reading.cacheDone&&depth===G.reading.cacheD){
+      G.reading.cacheDone=true;
+      const cr=pick(rooms.filter(r=>r!==startR&&r!==endR))||rooms[0];
+      const cxx=Math.floor(cr.x+cr.w/2),cyy=Math.floor(cr.y+cr.h/2);
+      if(G.reading.cacheK===0){const ca=tryArtifact(Math.min(24,depth+3))||genRelic(depth+3);G.items.push({x:cxx,y:cyy,it:ca})}
+      else if(G.reading.cacheK===1){for(let i=0;i<4;i++)G.items.push({x:cr.x+ri(0,cr.w-1),y:cr.y+ri(0,cr.h-1),it:{t:"gold",v:ri(120,260)}})}
+      else{G.items.push({x:cxx,y:cyy,it:genRelic(depth+2)});
+        for(let i=0;i<2;i++)G.items.push({x:cr.x+ri(0,cr.w-1),y:cr.y+ri(0,cr.h-1),it:randItem(depth+1)})}
+      for(let i=0;i<2;i++){const gx=cr.x+ri(0,cr.w-1),gy=cr.y+ri(0,cr.h-1);
+        if(G.map[gy][gx]===T_FLOOR&&!monAt(gx,gy))spawnMon(pickMon(Math.min(23,depth+3)),gx,gy)}
+      announce("The card pays out. This floor holds what was promised.","watch",true);
+    }
+    if(!G.crew&&G.reading&&depth>=G.reading.crewD&&(depth>=G.reading.crewD+2||Math.random()<.3)){
+      G.crew={alive:CREW.filter(c2=>c2.n!==G.reading.crewSkip).map(c2=>c2.n),eta:25+ri(0,15),done:false};
+      announce(G.crew.alive.length+" files travel together now. They have your floor number.","watch",true);
+    }else if(G.crew&&!G.crew.done&&G.crew.alive.length){
+      G.crew.chase=(G.crew.chase||0)+1;
+      G.crew.eta=Math.max(15,45+ri(0,40)-6*G.crew.chase);
+    }
+    if((G.visitStage||0)<3&&depth>=[8,14,19][G.visitStage||0]&&!G.won){
+      const fd=MONS.find(x9=>x9.fl.uq==="first");
+      if(fd){const vs=freeSpot(startR);
+        if(vs){const vdef=Object.assign({},fd,{sp:0.6,fl:Object.assign({},fd.fl,{visit:1,noSleep:1})});
+          const vm=spawnMon(vdef,vs.x,vs.y);vm.ttl=10;vm.aware=true;vm.vstage=G.visitStage||0;
+          G.visitStage=(G.visitStage||0)+1;
+          announce("Heat, without light. THE FIRST TRIGGER is visiting.","watch",true);}}
+    }
+    {
+      const hints=[];
+      if(G.pitTheme)hints.push({t:"Went around. The "+G.pitTheme+"s nest thick on this level.",b:"Count them before they count you."});
+      if(G.vaultHere)hints.push({t:"Locked doors mean payroll.",b:"Whoever wrote this did not collect."});
+      if(G.reading&&!G.reading.cacheDone&&G.reading.cacheD>depth)hints.push({t:"Fortune under "+(G.reading.cacheD*50)+" feet, says the Reading.",b:"Dig, or let a braver idiot have it."});
+      const nu=UNIQ.find(u2=>u2.depth>depth&&!G.uniqDead[u2.def.n]);
+      if(nu&&nu.depth-depth<=3)hints.push({t:nu.def.n+" keeps accounts at "+(nu.depth*50)+" feet.",b:"Settle yours before it does."});
+      if(G.reading&&G.reading.grudge&&!G.uniqDead[G.reading.grudge])hints.push({t:G.reading.grudge+" asked after you. By name.",b:"The Watcher confirmed the spelling."});
+      if(G.crew&&!G.crew.done&&G.crew.alive.length)hints.push({t:G.crew.alive.length+" of them, traveling together.",b:"They paid for information. It was cheap."});
+      if(hints.length&&Math.random()<.6){
+        const h9=pick(hints);const ns=freeSpot(startR);
+        if(ns)G.items.push({x:ns.x,y:ns.y,it:{t:"note",tx:h9}});
+      }
+    }
+    if(depth>=8&&Math.random()<.10){
+      const V=pick(VAULTS),th2=V.map.length,tw2=V.map[0].length;
+      let vx=-1,vy=-1;
+      for(let tr=0;tr<60&&vx<0;tr++){
+        const x0=ri(1,MW-tw2-2),y0=ri(1,MH-th2-2);
+        let ok=true;
+        for(let yy=y0-1;yy<=y0+th2&&ok;yy++)for(let xx=x0-1;xx<=x0+tw2&&ok;xx++)
+          if(t[yy][xx]!==T_WALL)ok=false;
+        if(ok){vx=x0;vy=y0}
+      }
+      if(vx>=0){
+        let doorX=vx,doorY=vy;
+        for(let yy=0;yy<th2;yy++)for(let xx=0;xx<tw2;xx++){
+          const ch=V.map[yy][xx],ax=vx+xx,ay=vy+yy;
+          if(ch==="#")t[ay][ax]=T_WALL;
+          else if(ch==="+"){t[ay][ax]=T_DOOR;doorX=ax;doorY=ay}
+          else if(ch==="d")t[ay][ax]=T_DOOR;
+          else{t[ay][ax]=T_FLOOR;
+            if(ch==="*")G.items.push({x:ax,y:ay,it:randItem(Math.min(24,depth+2))});
+            if(ch==="c")G.items.push({x:ax,y:ay,it:{t:"crate",tier:clamp(2+(depth>=12?1:0)+(depth>=18?1:0),0,4)}});
+            if(ch==="9"){const d9=pickMon(Math.min(23,depth+4));if(d9)spawnMon(d9,ax,ay)}
+            if(ch==="8"){const d8=pickMon(Math.min(23,depth+2));if(d8)spawnMon(d8,ax,ay)}
+          }
+        }
+        let best=null;
+        for(const r of rooms){const dd2=Math.abs(cx(r)-doorX)+Math.abs(cy(r)-doorY);
+          if(!best||dd2<best.d)best={r,d:dd2}}
+        if(best)corridor(doorX,doorY,cx(best.r),cy(best.r));
+        G.vaultHere=true;
+        announce("Built rooms, off the survey. Someone had plans.","watch",true);
+      }
+    }
     if(depth%4===0||Math.random()<0.12){
       const ks=freeSpot(startR);
       if(ks){const km=spawnMon(makeKeeper(depth),ks.x,ks.y);
@@ -1925,6 +2101,91 @@ function genLevel(depth,first){
   fov();
   if(bonus("exploreb")>0&&!isBoss){G.seen[cy(endR)][cx(endR)]=true;msg("True North marks the stair.","mg-sys")}
 }
+/* Condition designs adapted from the D&D 5.1 SRD, CC-BY-4.0, Wizards of the Coast. */
+const STUNNERS=["ogre","cap troll","bloom ogre","munitions ogre","flesh troll"];
+const GRABBERS=["moss serpent","index serpent","pit viper","vein crawler","deep eel"];
+const KNOCKERS=["hill giant","stone giant","vein giant","THE LANDLADY"];
+const MRES={
+ "coal imp":{fire:2,frost:-1},"young red dragon":{fire:2,frost:-1},"mature red dragon":{fire:2,frost:-1},
+ "balrog spawn":{fire:2,frost:-1},"THE FIRST TRIGGER":{fire:2},
+ "cordite elemental":{shock:2,fire:-1},"munitions ogre":{shock:2,fire:-1},
+ "water weird":{frost:2,fire:1},"deep eel":{frost:2},"drowned knight":{frost:1},"drowned scribe":{frost:1},"sodden wight":{frost:1,fire:-1},
+ "gas bloom":{spore:2,fire:-1},"sporeling":{spore:2,fire:-1},"myconid":{spore:2,fire:-1},"mycelial mass":{spore:2,fire:-1},
+ "spore wolf":{spore:1,fire:-1},"whistlecap":{spore:2,fire:-1},"bloom zombie":{spore:2,fire:-1},"bloom cultist":{spore:1},"bloom ogre":{spore:2,fire:-1},
+ "vein dragonet":{spore:2},"vein wyrm":{spore:2},
+ "iron golem":{spore:2,shock:-1,fire:1},"glass golem":{spore:2,shock:1},"flak golem":{spore:2,shock:-1},
+ "brass sentry":{spore:2,shock:-1},"turret crab":{spore:2,shock:-1}};
+const BREEDERS=["worm mass","silverfish swarm","vellum swarm"];
+const ESCORTS={
+ "orc captain":{n:"orc scab",ct:[2,4]},
+ "officer revenant":{n:"rifleman husk",ct:[2,3]},
+ "bloom cultist":{n:"sporeling",ct:[2,3]},
+ "myconid":{n:"sporeling",ct:[1,2]},
+ "drowned knight":{n:"sodden wight",ct:[1,2]},
+ "vein giant":{n:"vein crawler",ct:[2,3]}};
+const VAULTS=[
+{n:"strongroom",map:[
+"#########",
+"#8.....8#",
+"#.##d##.#",
+"+.#*c*#.#",
+"#.##d##.#",
+"#9.....9#",
+"#########"]},
+{n:"kennel",map:[
+"###+###",
+"#8...8#",
+"#.999.#",
+"#*...*#",
+"#######"]},
+{n:"reliquary",map:[
+"###########",
+"#*.#...#.*#",
+"#..d.9.d..#",
+"+..#.c.#..#",
+"#..d.9.d..#",
+"#*.#...#.*#",
+"###########"]}];
+const NOFEAR=["iron golem","glass golem","flak golem","brass sentry","turret crab","worm mass","silverfish swarm","vellum swarm","brass wasp swarm","pulse mass","mycelial mass"];
+function monRes(m,el){const t=MRES[m.def.n];return t?(t[el]||0):0}
+function monElScale(m,dmg,el){
+  const r=monRes(m,el);
+  if(r>=2)return{d:0,t:" (it shrugs it off)"};
+  if(r>=1)return{d:Math.max(1,Math.ceil(dmg/2)),t:" (resisted)"};
+  if(r<0)return{d:Math.floor(dmg*1.5),t:" (it recoils!)"};
+  return{d:dmg,t:""};
+}
+function fearless(m){const f=m.def.fl;return!!(f.boss||f.uq||f.named||f.undead||m.ally)||NOFEAR.includes(m.def.n)}
+const FACTION_DEF=[
+ ["orc",["orc scab","orc captain"]],
+ ["kobold",["kobold","kobold powder-boy"]],
+ ["bloom",["sporeling","myconid","gas bloom","bloom cultist","bloom zombie","bloom ogre","whistlecap","mycelial mass","spore wolf"]],
+ ["brass",["brass sentry","turret crab","flak golem","iron golem","glass golem","brass wasp swarm"]],
+ ["drowned",["water weird","deep eel","drowned knight","drowned scribe","sodden wight"]],
+ ["vein",["vein crawler","vein giant","vein dragonet","vein wyrm","meat angel","chorister of meat","seraph fragment","pulse mass","artery hound"]]];
+const FACTIONS={};
+for(const[fid,names]of FACTION_DEF)for(const nn of names)FACTIONS[nn]=fid;
+const RIVALS={orc:"kobold",kobold:"orc",bloom:"brass",brass:"bloom",drowned:"vein",vein:"drowned"};
+const BACKS=[
+ {id:"clerk",n:"a filing clerk",ab:{rConf:1},gold:30,debt:"One misfiled page. It is still down here."},
+ {id:"powder",n:"a powder-monkey",ab:{rShock:1},gold:20,debt:"Eleven fingers owed. You kept ten."},
+ {id:"lamplighter",n:"a lamplighter",ab:{seeInv:1},gold:15,debt:"Forty lamps lit. One put out on purpose."},
+ {id:"gravehand",n:"a gravehand",ab:{rSpore:1},gold:25,debt:"Sixty plots dug. Fifty-nine stayed shut."},
+ {id:"debtor",n:"a debtor",ab:{},gold:150,debt:"The principal is paid. The interest followed you down."},
+ {id:"chorister",n:"a lapsed chorister",ab:{rNull:1},gold:10,debt:"You still know the hymn. It knows you skipped a verse."}];
+function buildReading(){
+  const cacheKinds=["THE SEALED PAGE","THE COMPANY PURSE","THE DEEP LIBRARY"];
+  const ck=ri(0,2),cacheD=ri(Math.min(19,Math.max(6,(G.depth||1)+1)),20);
+  const alive=UNIQ.filter(u2=>!G.uniqDead[u2.def.n]);
+  const gr=alive.length?pick(alive).def.n:null;
+  const hr=pick([[13,"early"],[15,"on schedule"],[17,"late"]]);
+  const skip=Math.random()<.25?pick(CREW).n:null;
+  G.reading={cacheD,cacheK:ck,grudge:gr,crewD:hr[0],crewSkip:skip,cacheDone:false};
+  announce("The Watcher draws three cards.","watch",true);
+  announce("First: "+cacheKinds[ck]+", buried at "+(cacheD*50)+" feet.","watch",true);
+  if(gr)announce("Second: THE GRUDGE. "+gr+" knows your name.","watch",true);
+  announce("Third: THE HOUR. The crew forms "+hr[1]+(skip?". One chair stays empty: "+skip+" never signed":"")+".","watch",true);
+}
 function pickMon(depth){
   const dd=depth+(Math.random()<.08?ri(2,5):0);
   let pool=MONS.filter(m=>!m.fl.boss&&!m.fl.uq&&m.d[0]<=dd+1+G.diff.up&&m.d[1]>=depth);
@@ -1958,6 +2219,12 @@ function spawnRandom(def,avoidRoom){
       const x=s.x+ri(-2,2),y=s.y+ri(-2,2);
       if(x>0&&y>0&&x<MW-1&&y<MH-1&&G.map[y][x]===T_FLOOR&&!G.mons.some(m=>m.x===x&&m.y===y))spawnMon(def,x,y);
     }}
+  if(ESCORTS[def.n]){const E=ESCORTS[def.n],edef=MONS.find(x2=>x2.n===E.n);
+    if(edef){const ec=ri(E.ct[0],E.ct[1]);
+      for(let i=0;i<ec;i++){
+        const x=s.x+ri(-2,2),y=s.y+ri(-2,2);
+        if(x>0&&y>0&&x<MW-1&&y<MH-1&&G.map[y][x]===T_FLOOR&&!G.mons.some(m2=>m2.x===x&&m2.y===y))spawnMon(edef,x,y);
+      }}}
 }
 function spawnNear(def,room){
   for(let i=0;i<60;i++){
@@ -1997,6 +2264,7 @@ function meleeSkill(){
   if(p.status.bless>0)sk+=3;
   if(p.status.rage>0)sk+=3;
   if(p.status.migraine>0)sk-=4;
+  if(p.status.prone>0)sk-=4;
   if(p.status.wellfed>0)sk+=1;
   return sk;
 }
@@ -2006,6 +2274,7 @@ function bowSkill(){
   if(p.org.bowb)sk+=Math.ceil(charLvl()/2);
   if(p.status.bless>0)sk+=3;
   if(p.status.migraine>0)sk-=4;
+  if(p.status.prone>0)sk-=4;
   return sk;
 }
 function saveThrow(){
@@ -2055,13 +2324,14 @@ function doPlayerMove(dx,dy){
   if(t===T_DOOR){G.map[ny][nx]=T_ODOOR;msg("You open the door.","mg-sys");G.lastMove=false;endTurn();return}
   if(t===T_WALL||t===T_VEIN){tryDig(nx,ny);return}
   if(t===T_FLOOR||t===T_ODOOR||t===T_DOWN||t===T_UP||t===T_RUBBLE||t===T_ALTAR){
+    if(p.status.held>0){msg("You strain against the grip and hold your ground.","mg-dmg");endTurn();return}
     p.x=nx;p.y=ny;G.lastMove=true;
     for(let i=G.items.length-1;i>=0;i--){
       const gi=G.items[i];
       if(gi.x===nx&&gi.y===ny&&gi.it.t==="gold"){
         let gv=gi.it.v;
         if(behv("tithe")){const cut=Math.floor(gv*behv("tithe")/100);gv-=cut;if(cut)msg("The tithe takes "+cut+".","mg-dmg")}
-        p.gold+=gv;msg("+"+gv+" gold.","mg-gold");
+        {const gg=godGold(gv);p.gold+=gg;msg("+"+gg+" gold.","mg-gold");}
         if(behv("goldXp"))tag("gambler",Math.max(1,Math.floor(gv/40)));
         if(p.gold>=2000)award("pockets");
         G.items.splice(i,1);
@@ -2126,7 +2396,7 @@ function pickUp(){
   if(it.t==="gold"){
     let gv=it.v;
     if(behv("tithe")){const cut=Math.floor(gv*behv("tithe")/100);gv-=cut;if(cut)msg("The tithe takes "+cut+".","mg-dmg")}
-    p.gold+=gv;msg("You collect "+gv+" gold.","mg-gold");
+    {const gg=godGold(gv);p.gold+=gg;msg("You collect "+gg+" gold.","mg-gold");}
     if(behv("goldXp"))tag("gambler",Math.max(1,Math.floor(gv/40)));
     if(p.gold>=2000)award("pockets");
     G.items.splice(idx,1);endTurn();return}
@@ -2144,7 +2414,10 @@ function weaponDamage(m){
   if(p.status.form>0)dmg+=3;
   if(p.status.wellfed>0&&poolHasSkill("cook","Monster Chef"))dmg+=2;
   if(it&&it.suf!==undefined){const sf=SUFFIX[it.suf];
-    if(sf.brand)dmg+=dice(sf.brand[0],sf.brand[1]);
+    if(sf.brand){let bd=dice(sf.brand[0],sf.brand[1]);
+      if(sf.el){const e2=monElScale(m,bd,sf.el);bd=e2.d;
+        if(e2.t&&Math.random()<.3)msg("Your brand"+e2.t,"mg-hit")}
+      dmg+=bd}
     if(sf.venom&&!m.def.fl.undead)dmg+=dice(1,6);
     if(sf.slay&&m.def.fl[sf.slay])dmg*=2;
     if(sf.stratb&&(it.si===undefined||it.si===stratumIdx(G.depth)))dmg+=2;
@@ -2158,6 +2431,7 @@ function weaponDamage(m){
 }
 function playerAttack(m){
   const p=G.p;
+  if(m.def.fl.visit){msg("Your blow passes through tomorrow's problem.","mg-hit");return}
   if(m.phased){m.asleep=false;m.aware=true;
     msg("Your blow passes through where the "+m.def.n+" almost is.","mg-hit");return}
   const wasAsleep=m.asleep,sneak=(m.asleep||!m.aware);
@@ -2201,6 +2475,7 @@ function damageMon(m,dmg,poolId){
   if(m.def.fl.uq==="veyn")dmg=Math.max(1,Math.ceil(dmg/2));
   const fc=G._crit?"df-crit":"df-hit";G._crit=false;
   dmgFloat(m.x,m.y,dmg,fc);
+  if(m.def.fl.visit){if(monSeen(m)&&Math.random()<.25)msg("It is not entirely here. Not yet.","mg-mag");return false}
   if(m.phased){if(monSeen(m))msg("The blow finds nothing solid.","mg-mag");return false}
   m.hp-=dmg;
   if(m.def.fl.molt&&!m.molted&&m.hp>0&&m.hp<m.mhp*.4){
@@ -2208,7 +2483,12 @@ function damageMon(m,dmg,poolId){
     m.def=Object.assign({},m.def,{dmg:[m.def.dmg[0]+1,m.def.dmg[1]],c:"#ff7ab0"});
     if(monSeen(m))announce("It sheds its shape for a worse one.","watch",true);
   }
+  if(m.hp>0&&m.hp<m.mhp*.25&&!(m.afraid>0)&&!fearless(m)&&Math.random()<.4){
+    m.afraid=ri(8,14);
+    if(monSeen(m))msg("The "+m.def.n+" breaks.","mg-sys");
+  }
   if(m.hp<=0){
+    for(const o of G.mons)if(o!==m&&o.def.n===m.def.n&&!fearless(o)&&!(o.afraid>0)&&dist(o.x,o.y,m.x,m.y)<=7&&Math.random()<.5)o.afraid=ri(5,10);
     if(m.def.fl.uq==="seraph"&&!m.trans){
       m.trans=true;m.hp=Math.floor(m.mhp*0.6);
       m.def=Object.assign({},m.def,{dmg:[m.def.dmg[0]+1,m.def.dmg[1]],c:"#ff4a6a",sk:m.def.sk+2});
@@ -2252,9 +2532,15 @@ function killMon(m,poolId){
   const w=p.eq.w;
   if(w&&w.suf!==undefined&&!w.sufKnown){w.sufKnown=true;
     announce("The weapon was "+SUFFIX[w.suf].n+".","watch")}
-  const k=p.killCt[def.n]||0;
+  let k=p.killCt[def.n]||0;
+  p.killStr=p.killStr||{};
+  const cs9=stratumIdx(G.depth);
+  if(cs9>((p.killStr[def.n]===undefined)?-1:p.killStr[def.n])){
+    if(k>0){k=Math.floor(k/2);p.killCt[def.n]=k}
+    p.killStr[def.n]=cs9;
+  }
   const decay=behv("novG")?0.90:0.85;
-  let xp=Math.max(1,Math.floor(def.xp*stratumMult(G.depth)*Math.max(0.10,Math.pow(decay,k))*(k===0?(2+behv("firstx")):1)));
+  let xp=Math.max(1,Math.floor(def.xp*stratumMult(G.depth)*Math.max(0.20,Math.pow(decay,k))*(k===0?(2+behv("firstx")):1)));
   if(behv("xpb"))xp=Math.floor(xp*(1+behv("xpb")/100));
   if(G._slept&&behv("sleepPay"))xp=Math.floor(xp*(1+behv("sleepPay")/100));
   G._slept=false;
@@ -2271,8 +2557,12 @@ function killMon(m,poolId){
     else{G.crew.done=true;
       const ba=tryArtifact(Math.min(24,G.depth+3));
       if(ba)G.items.push({x:p.x,y:p.y,it:ba});
-      p.gold+=400;
-      announce("The crew is finished. A bounty arrives, notarized. +400 gold.","watch",true);}}
+      const bg9=godGold(400);p.gold+=bg9;
+      announce("The crew is finished. A bounty arrives, notarized. +"+bg9+" gold.","watch",true);}}
+  if(p.god===2){p.godK=(p.godK||0)+1;if(p.godK>=5){p.godK-=5;p.piety=(p.piety||0)+1}}
+  if(m.grudge){G.items.push({x:m.x,y:m.y,it:genRelic(Math.min(24,G.depth+3))});
+    p.gold+=godGold(150);
+    announce("The grudge settles. Its effects are yours, plus interest.","watch",true);}
   p.killCt[def.n]=k+1;
   p.batch.add(def.n);
   tag(poolId||p.org.id,xp);
@@ -2341,7 +2631,10 @@ function endTurn(){
   if(st.pois>0){st.pois--;p.hp-=1;
     if(p.hp<=0){die("poison");return}
     if(st.pois===0)msg("The poison runs its course.","mg-good")}
-  for(const k of["blind","bless","haste","shield","wellfed","rage","brand","veil","form","nul","migraine","winded"]){
+  if(st.held>0&&!G.mons.some(m2=>!m2.ally&&GRABBERS.includes(m2.def.n)&&dist(m2.x,m2.y,p.x,p.y)<=1)){
+    st.held=0;msg("You tear free.","mg-good");
+  }
+  for(const k of["blind","bless","haste","shield","wellfed","rage","brand","veil","form","nul","migraine","winded","stun","held","prone"]){
     if(st[k]>0){st[k]--;
       if(k==="wellfed"&&behv("hungry")&&st[k]>0)st[k]--;
       if(st[k]===0){
@@ -2374,7 +2667,7 @@ function endTurn(){
       if(gi.it.t==="gold"&&dist(p.x,p.y,gi.x,gi.y)<=behv("goldMag")){
         let gv=gi.it.v;
         if(behv("tithe"))gv-=Math.floor(gv*behv("tithe")/100);
-        p.gold+=gv;G.items.splice(i,1);
+        p.gold+=godGold(gv);G.items.splice(i,1);
         msg("+"+gv+" gold, magnetized.","mg-gold");
       }
     }
@@ -2385,7 +2678,8 @@ function endTurn(){
   }
   if(G.threshold){G.threshold.turns--;
     if(G.threshold.turns<=0){G.threshold=null;msg("The Threshold lapses.","mg-sys")}}
-  const spd=pspd();
+  let spd=pspd();
+  if(st.stun>0)spd-=8;
   const tfrac=10/Math.max(2,10+spd);
   if(spd>=8&&st.wellfed>0){st.wellfed=Math.max(0,st.wellfed-1);
     if(!G.spdHint){G.spdHint=1;msg("Speed eats. Pack accordingly.","mg-sys")}}
@@ -2467,10 +2761,24 @@ function inThreshold(x,y){return G.threshold&&G.threshold.tiles.has(x+","+y)}
 function monsterAct(m){
   const p=G.p,fl=m.def.fl;
   if(m.ttl>0){m.ttl--;if(m.ttl===0){const i=G.mons.indexOf(m);if(i>=0)G.mons.splice(i,1);
-    msg(m.ally?"Your servant's lease expires.":"The "+m.def.n+" winds down and stops.","mg-sys");return}}
+    msg(m.ally?"Your servant's lease expires.":(m.def.fl.visit?"It has seen enough, for now.":"The "+m.def.n+" winds down and stops."),"mg-sys");return}}
   if(m.nul>0)m.nul--;
   if(m.hst>0)m.hst--;
   if(m.slw>0)m.slw--;
+  if(m.def.fl.visit){
+    m.vt=(m.vt||0)+1;
+    if(m.vt===4){
+      if(m.vstage===0&&monSeen(m))announce("It looks at you the way you look at a menu.","watch",true);
+      if(m.vstage===1){for(let i=0;i<2;i++){const s8=freeSpot(null);if(s8)spawnMon(pickMon(Math.min(23,G.depth)),s8.x,s8.y)}
+        announce("It leaves you company. A courtesy.","watch",true)}
+      if(m.vstage===2){G.p.status.nul=Math.max(G.p.status.nul||0,4);
+        announce("It borrows your words. To compare.","watch",true)}
+    }
+    const dv=dist(m.x,m.y,G.p.x,G.p.y);
+    if(dv>4){const sx9=Math.sign(G.p.x-m.x),sy9=Math.sign(G.p.y-m.y);
+      if(passableFor(m,m.x+sx9,m.y+sy9)&&!monAt(m.x+sx9,m.y+sy9)){m.x+=sx9;m.y+=sy9}}
+    return;
+  }
   if(m.timer!==undefined&&--m.timer<=0){
     const ix=G.mons.indexOf(m);if(ix>=0)G.mons.splice(ix,1);
     msg(m.def.n+" runs out of you.","mg-sys");return;
@@ -2496,10 +2804,34 @@ function monsterAct(m){
   /* target: player or nearest ally */
   let tx=p.x,ty=p.y,targetAlly=null;
   for(const a of G.mons)if(a.ally&&dist(m.x,m.y,a.x,a.y)<dist(m.x,m.y,tx,ty)){tx=a.x;ty=a.y;targetAlly=a}
+  const mf=FACTIONS[m.def.n];
+  if(mf&&m.aware){const rf=RIVALS[mf];
+    for(const a of G.mons)if(a!==m&&!a.ally&&FACTIONS[a.def.n]===rf&&dist(m.x,m.y,a.x,a.y)<=6&&dist(m.x,m.y,a.x,a.y)<dist(m.x,m.y,tx,ty)){tx=a.x;ty=a.y;targetAlly=a}}
   const d=dist(m.x,m.y,tx,ty);
   if(fl.brk){m.brkT=(m.brkT||0)+1;const wasP=m.phased;m.phased=(m.brkT%6)<3;
     if(m.phased&&!wasP&&monSeen(m))msg("The "+m.def.n+" thins into the half-light.","mg-mag");
     if(!m.phased&&wasP&&monSeen(m))msg("The "+m.def.n+" is abruptly a fact again.","mg-dmg");}
+  if(m.afraid>0){
+    m.afraid--;
+    if(m.hp>m.mhp*.5||m.afraid<=0){m.afraid=0;
+      if(monSeen(m))msg("The "+m.def.n+" finds its nerve.","mg-sys")}
+    else{
+      const fx2=Math.sign(m.x-tx),fy2=Math.sign(m.y-ty);
+      const opts=[[fx2,fy2],[fx2,0],[0,fy2]].filter(o=>o[0]||o[1]);
+      let fled=false;
+      for(const o of opts){const nx=m.x+o[0],ny=m.y+o[1];
+        if(passableFor(m,nx,ny)&&!monAt(nx,ny)&&!(nx===p.x&&ny===p.y)){m.x=nx;m.y=ny;fled=true;break}}
+      if(fled)return;
+    }
+  }
+  if(BREEDERS.includes(m.def.n)&&!m.asleep&&!(m.afraid>0)&&G.mons.length<80&&Math.random()<.09){
+    const same=G.mons.filter(x=>x.def.n===m.def.n).length;
+    if(same<12){
+      const sp2=[[m.x+1,m.y],[m.x-1,m.y],[m.x,m.y+1],[m.x,m.y-1]].filter(s=>passableFor(null,s[0],s[1])&&!monAt(s[0],s[1])&&!(s[0]===p.x&&s[1]===p.y));
+      if(sp2.length){const b2=pick(sp2);const nm=spawnMon(m.def,b2[0],b2[1]);nm.asleep=false;nm.aware=m.aware;
+        if(monSeen(m))msg("The "+m.def.n+" divides.","mg-mag");return}
+    }
+  }
   /* unique gimmicks */
   if(fl.uq==="veyn"&&!m.enraged&&m.hp<m.mhp/2){m.enraged=true;
     m.def=Object.assign({},m.def,{dmg:[m.def.dmg[0]+1,m.def.dmg[1]]});
@@ -2562,6 +2894,7 @@ function monsterAct(m){
           for(let s=0;s<3;s++){const nx=p.x+kx,ny=p.y+ky;
             if(passableFor(null,nx,ny)&&!monAt(nx,ny)){p.x=nx;p.y=ny;moved++}else break}
           if(moved){msg("The "+m.def.n+" slams pressure through the floor. You are thrown.","mg-dmg");
+            p.status.prone=2;
             hurt(dice(1,4)+moved,m);if(G.over)return;fov();return}
         }
       }
@@ -2569,7 +2902,11 @@ function monsterAct(m){
     if(fl.tinker&&(m.built||0)<2&&d>=2&&d<=7&&losClear(m.x,m.y,p.x,p.y)&&Math.random()<.2){
       const s2=[[m.x+1,m.y],[m.x-1,m.y],[m.x,m.y+1],[m.x,m.y-1]].find(s=>passableFor(null,s[0],s[1])&&!monAt(s[0],s[1]));
       const tdef=MONS.find(x=>x.n==="turret crab");
-      if(s2&&tdef){m.built=(m.built||0)+1;const t=spawnMon(tdef,s2[0],s2[1]);t.ttl=25;t.aware=true;
+      if(s2&&tdef){m.built=(m.built||0)+1;
+        const fdef=G.depth<14?Object.assign({},tdef,{dmg:[1,6],sk:9}):tdef;
+        const t=spawnMon(fdef,s2[0],s2[1]);
+        if(G.depth<14){t.hp=Math.ceil(t.hp*.6);t.mhp=Math.ceil(t.mhp*.6)}
+        t.ttl=25;t.aware=true;
         if(monSeen(m))msg("The "+m.def.n+" assembles something that hates you.","mg-mag");return}
     }
     if(!targetAlly&&fl.caster&&losClear(m.x,m.y,p.x,p.y)&&d>=2&&d<=7&&Math.random()<.35){
@@ -2626,6 +2963,7 @@ function monHitPlayer(m){
   const p=G.p,fl=m.def.fl;
   let ch=hitChance(m.def.sk*2,playerAC());
   if(fl.acTouch)ch=Math.max(ch,.7);
+  if(p.status.prone>0)ch=Math.min(.95,ch+.15);
   if(fl.uq==="aleph")ch=Math.max(ch,.85);
   if(Math.random()>ch){msg("The "+m.def.n+" misses you.","mg-hit");return}
   let dmg=Math.max(1,Math.round(dice(m.def.dmg[0],m.def.dmg[1])*G.diff.mdm));
@@ -2642,6 +2980,15 @@ function monHitPlayer(m){
     msg("Your power is a word someone else is saying.","mg-dmg")}
   if(fl.conf&&resFor("rConf")<=0&&Math.random()<.4){p.status.migraine=Math.max(p.status.migraine,ri(3,6));
     msg("The noise gets into your aim.","mg-dmg")}
+  if(STUNNERS.includes(m.def.n)&&resFor("freeAct")<=0&&Math.random()<.3){
+    p.status.stun=Math.max(p.status.stun||0,ri(2,4));
+    msg("The blow rings you like a bell.","mg-dmg")}
+  if(GRABBERS.includes(m.def.n)&&resFor("freeAct")<=0&&!(p.status.held>0)&&Math.random()<.35){
+    p.status.held=ri(2,4);
+    msg("The "+m.def.n+" coils around you. You are held.","mg-dmg")}
+  if(KNOCKERS.includes(m.def.n)&&resFor("freeAct")<=0&&!(p.status.prone>0)&&Math.random()<.25){
+    p.status.prone=2;
+    msg("The blow takes your legs. You are down.","mg-dmg")}
   if(fl.drainX){let any=false;
     const f=behv("unbGuard")?0.92:0.7;
     for(const k in p.unb){if(p.unb[k]>0)any=true;p.unb[k]=Math.floor(p.unb[k]*f)}
@@ -2693,9 +3040,12 @@ function allyAct(m){
 function monHitAlly(m,a){
   if(Math.random()<.6){
     const dmg=dice(m.def.dmg[0],m.def.dmg[1]);
+    const seen=monSeen(m)||monSeen(a);
     a.hp-=dmg;
+    if(seen&&!a.ally&&Math.random()<.5)msg("The "+m.def.n+" savages the "+a.def.n+".","mg-sys");
     if(a.hp<=0){const i=G.mons.indexOf(a);if(i>=0)G.mons.splice(i,1);
-      msg("Your servant is torn apart.","mg-dmg")}
+      if(a.ally)msg("Your servant is torn apart.","mg-dmg");
+      else if(seen)msg("The "+a.def.n+" is torn apart.","mg-sys")}
   }
 }
 /* ============ magic, powers, ranged ============ */
@@ -2746,9 +3096,11 @@ function castSpell(k){
     if(!t){msg("No target in sight.","mg-sys");p.sp+=cost;return}
     let dmg=k==="mm"?dice(1,4,Math.floor(lvl/2)):dice(3,6,Math.floor(lvl/2));
     if(k==="orb"&&t.def.fl.undead)dmg*=2;
+    let btag="";
+    if(k==="frost"){const e2=monElScale(t,dmg,"frost");dmg=e2.d;btag=e2.t}
     t.asleep=false;t.aware=true;
-    const dead=damageMon(t,dmg,p.org.id);
-    msg("The bolt strikes the "+t.def.n+" ("+dmg+")"+(dead?": destroyed.":"."),"mg-mag");
+    const dead=dmg>0?damageMon(t,dmg,p.org.id):false;
+    msg("The bolt strikes the "+t.def.n+" ("+dmg+btag+")"+(dead?": destroyed.":"."),"mg-mag");
   }else if(k==="fball"){
     const t=nearestTarget(1,7);
     if(!t){msg("No target in sight.","mg-sys");p.sp+=cost;return}
@@ -2757,9 +3109,9 @@ function castSpell(k){
     for(const m of G.mons.slice()){
       if(m.ally||dist(cx,cy,m.x,m.y)>1)continue;
       m.asleep=false;m.aware=true;
-      const dmg=dice(6,6);
-      const dead=damageMon(m,dmg,p.org.id);
-      msg("The "+m.def.n+" burns ("+dmg+")"+(dead?": ash.":"."),"mg-mag");
+      const e2=monElScale(m,dice(6,6),"fire");
+      const dead=e2.d>0?damageMon(m,e2.d,p.org.id):false;
+      msg("The "+m.def.n+" burns ("+e2.d+e2.t+")"+(dead?": ash.":"."),"mg-mag");
     }
   }else if(k==="phase")teleportPlayer(8);
   else if(k==="tele")teleportPlayer(0);
@@ -2786,6 +3138,7 @@ function fireBow(){
     fired=true;
     if(b.gun&&!(behv("ammoSave")&&ri(1,100)<=behv("ammoSave")))it.ammo--;
     t.asleep=false;t.aware=true;
+    if(t.phased){msg("Your shot passes through where the "+t.def.n+" almost is.","mg-hit");continue}
     if(Math.random()<hitChance(bowSkill(),t.def.ac)){
       let dmg=Math.max(1,dice(b.d[0],b.d[1])+smod(p.st[3])+(it.b||0)+bonus("dmg"));
       if(it.x&&it.x.slay&&t.def.fl[it.x.slay])dmg*=2;
@@ -3558,6 +3911,7 @@ function renderHud(){
   if(S.haste>0)stx.push("FAST");if(S.shield>0)stx.push("WARD");if(S.wellfed>0)stx.push("FED");
   if(S.rage>0)stx.push("RAGE");if(S.ghost>0)stx.push("MIST");if(S.brand>0)stx.push("BRAND");
   if(S.veil>0)stx.push("VEIL");if(S.form>0)stx.push("FORM");if(S.migraine>0)stx.push("ACHE");
+  if(S.stun>0)stx.push("RUNG");if(S.held>0)stx.push("HELD");if(S.prone>0)stx.push("DOWN");
   if(stx.length)h+='<div style="color:var(--blood)">'+stx.join(" ")+"</div>";
   h+='<div class="dep" style="color:'+PAL.acc+'">'+(G.depth*50)+" ft · "+p.gold+"g</div>";
   el("hudTop").innerHTML=h;
@@ -4028,7 +4382,7 @@ function openMonModal(m){
   mrow(L,'<span style="color:'+d.c+'">'+d.g+"</span> "+d.n,
     cond+(m.asleep?" · asleep":m.aware?" · has your scent":" · unaware"));
   const msv=mSpd(m),svw=msv>=1.35?"very quick":msv>=1.15?"quick":msv>=0.86?"steady":msv>=0.65?"slow":"crawling";
-  mrow(L,"Hits for "+d.dmg[0]+"d"+d.dmg[1],"AC "+d.ac+" · "+svw+" (x"+msv.toFixed(2)+")"+(m.hst>0?" · HASTED":"")+(m.slw>0?" · SLOWED":"")+(d.fl.uq?" · NAMED":""));
+  mrow(L,"Hits for "+d.dmg[0]+"d"+d.dmg[1],"AC "+d.ac+" · "+svw+" (x"+msv.toFixed(2)+")"+(m.hst>0?" · HASTED":"")+(m.slw>0?" · SLOWED":"")+(m.afraid>0?" · BROKEN":"")+(d.fl.uq?" · NAMED":""));
   if(d.prt)mrow(L,"PRT file",d.prt+(m.phased?" · PHASED OUT":""));
   const F=d.fl,words=[];
   if(F.pack)words.push("hunts in packs");if(F.pois)words.push("venomous");if(F.undead)words.push("undead");
@@ -4042,11 +4396,18 @@ function openMonModal(m){
   if(F.nulTouch)words.push("steals the words");if(F.acTouch)words.push("ignores armor");if(F.molt)words.push("sheds shapes");
   if(F.conf)words.push("gets into your head");if(F.el)words.push(F.el+"-touched");
   if(F.drainC)words.push("drinks charges");if(F.disen)words.push("corrodes what you carry");
+  if(BREEDERS.includes(d.n))words.push("divides when let be");
+  if(FACTIONS[d.n])words.push(FACTIONS[d.n]+"-sworn, hates the "+RIVALS[FACTIONS[d.n]]);
+  if(STUNNERS.includes(d.n))words.push("rings your bell");
+  if(GRABBERS.includes(d.n))words.push("grabs hold");
+  if(KNOCKERS.includes(d.n))words.push("knocks you down");
+  const MR2=MRES[d.n];if(MR2)for(const el3 in MR2){const rv=MR2[el3];
+    if(rv>=2)words.push(el3+"-proof");else if(rv>=1)words.push("resists "+el3);else words.push("weak to "+el3)}
   if(words.length)mrow(L,"Habits",words.join(", "));
   if(!p.ct.inspected)p.ct.inspected={};
   if(!p.ct.inspected[d.n]){p.ct.inspected[d.n]=1;tag("scribe",Math.floor(4*stratumMult(G.depth)))}
   const k=p.killCt[d.n]||0;
-  const mult=Math.max(0.10,Math.pow(0.85,k));
+  const mult=Math.max(0.20,Math.pow(0.85,k));
   const val=Math.max(1,Math.floor(d.xp*stratumMult(G.depth)*mult*(k===0?2:1)));
   mrow(L,"Your record: "+k+" killed",
     k===0?"First kill pays double: ⌁ "+val+".":"Novelty x"+mult.toFixed(2)+": worth ⌁ "+val+" now.");
@@ -4061,7 +4422,7 @@ function openBestiary(){
   if(!known.length){mrow(L,"Nothing yet.","The dark is patient.");return}
   for(const d of known){
     const k=p.killCt[d.n];
-    const mult=Math.max(0.10,Math.pow(0.85,k));
+    const mult=Math.max(0.20,Math.pow(0.85,k));
     const val=Math.max(1,Math.floor(d.xp*stratumMult(G.depth)*mult));
     const F=d.fl,w=[];
     if(F.pack)w.push("pack");if(F.pois)w.push("venom");if(F.undead)w.push("undead");
@@ -4083,7 +4444,7 @@ function snapshotG(){
   const p=G.p,eqIdx={};
   for(const s of["w","b","a","s","r1","r2","c"])eqIdx[s]=p.eq[s]?p.inv.indexOf(p.eq[s]):-1;
   return JSON.stringify({v:1,tone:TONE,g:{
-    depth:G.depth,diffI:G.diffI,won:G.won,ach:G.ach,artsOut:G.artsOut,uniqDead:G.uniqDead,crew:G.crew||null,
+    depth:G.depth,diffI:G.diffI,won:G.won,ach:G.ach,artsOut:G.artsOut,uniqDead:G.uniqDead,crew:G.crew||null,reading:G.reading||null,visitStage:G.visitStage||0,
     balrogDead:G.balrogDead,ambient:G.ambient,wallHp:G.wallHp,hostedHere:G.hostedHere,
     tookDmgThisFloor:G.tookDmgThisFloor,explored80:G.explored80,killsFloor:G.killsFloor||0,
     map:G.map,seen:G.seen,rooms:G.rooms,items:G.items,mons:G.mons,msgs:G.msgs.slice(-40),
@@ -4094,7 +4455,7 @@ function snapshotG(){
     p:{race:p.race,org:p.org,st:p.st,gold:p.gold,kills:p.kills,turn:p.turn,inv:p.inv,eqIdx,
        status:p.status,shard:p.shard,triggered:p.triggered,en:p.en||0,maxDepth:p.maxDepth||1,
        pools:p.pools,unb:p.unb,batch:[...p.batch],killCt:p.killCt,ct:p.ct,
-       found:p.found,codex:p.codex,visSeen:p.visSeen,prtSeen:p.prtSeen||{},evolved:p.evolved,
+       found:p.found,codex:p.codex,visSeen:p.visSeen,name:p.name||"",bgId:(p.bg?p.bg.id:null),prtSeen:p.prtSeen||{},killCt:p.killCt||{},killStr:p.killStr||{},god:(p.god===undefined?null:p.god),piety:p.piety||0,godCd1:p.godCd1||0,godCd2:p.godCd2||0,godG:p.godG||0,godK:p.godK||0,evolved:p.evolved,
        x:p.x,y:p.y,hp:p.hp,mhp:p.mhp,sp:p.sp,msp:p.msp}}});
 }
 function saveGame(){if(!G||G.over)return;lsSet(SAVEKEY,snapshotG())}
@@ -4106,11 +4467,11 @@ function restoreG(str){
     inv:rp.inv,eq:{},status:rp.status,shard:rp.shard,triggered:rp.triggered,
     en:rp.en||0,maxDepth:rp.maxDepth||g.depth||1,pools:rp.pools,unb:rp.unb,batch:new Set(rp.batch),
     killCt:rp.killCt,ct:rp.ct,found:rp.found||{},codex:rp.codex||[],
-    visSeen:rp.visSeen||{},prtSeen:rp.prtSeen||{},evolved:rp.evolved||null,
+    visSeen:rp.visSeen||{},name:rp.name||genName(),bg:(rp.bgId&&BACKS.find(b9=>b9.id===rp.bgId))||null,prtSeen:rp.prtSeen||{},killCt:rp.killCt||{},killStr:rp.killStr||{},god:(rp.god===undefined?null:rp.god),piety:rp.piety||0,godCd1:rp.godCd1||0,godCd2:rp.godCd2||0,godG:rp.godG||0,godK:rp.godK||0,evolved:rp.evolved||null,
     x:rp.x,y:rp.y,hp:rp.hp,mhp:rp.mhp,sp:rp.sp,msp:rp.msp};
   for(const s of["w","b","a","s","r1","r2","c"])p.eq[s]=rp.eqIdx&&rp.eqIdx[s]>=0?p.inv[rp.eqIdx[s]]:null;
   G={p,depth:g.depth,msgs:g.msgs||[],over:false,won:!!g.won,ach:g.ach,artsOut:g.artsOut,
-    uniqDead:g.uniqDead,balrogDead:g.balrogDead,crew:g.crew||null,
+    uniqDead:g.uniqDead,balrogDead:g.balrogDead,crew:g.crew||null,reading:g.reading||null,visitStage:g.visitStage||0,
     threshold:g.threshold?{tiles:new Set(g.threshold.tiles),turns:g.threshold.turns}:null,
     forkQueue:[],ambient:g.ambient,wallHp:g.wallHp,hostedHere:g.hostedHere,
     tookDmgThisFloor:g.tookDmgThisFloor,explored80:g.explored80,killsFloor:g.killsFloor,
@@ -4162,7 +4523,7 @@ function agoStr(t){
 }
 function saveToSlot(i){
   if(!G||G.over)return;
-  const m={t:Date.now(),race:G.p.race.name,org:G.p.org.name,depth:G.depth,lvl:charLvl(),turn:G.p.turn,won:!!G.won};
+  const m={t:Date.now(),n:G.p.name||"",race:G.p.race.name,org:G.p.org.name,depth:G.depth,lvl:charLvl(),turn:G.p.turn,won:!!G.won};
   if(!lsSet(slotKey(i),snapshotG())){toast("Storage refused the save");return}
   lsSet(slotMKey(i),JSON.stringify(m));
   toast("Scratched into slot "+i,"ach");
@@ -4186,7 +4547,7 @@ function openSlots(){
     const s=lsGet(slotKey(i));
     let m=null;if(s){try{m=JSON.parse(lsGet(slotMKey(i)))}catch(e){}}
     const r=document.createElement("div");r.className="row";
-    const head=s?("Slot "+i+": "+(m?m.race+" "+m.org+(m.won?" \u2605":""):"saved game")):("Slot "+i+": empty");
+    const head=s?("Slot "+i+": "+(m?((m.n?m.n+" \u00b7 ":"")+m.race+" "+m.org+(m.won?" \u2605":"")):"saved game")):("Slot "+i+": empty");
     const d=s&&m?("Depth "+m.depth+" \u00b7 level "+m.lvl+" \u00b7 turn "+m.turn+" \u00b7 "+agoStr(m.t)):"";
     r.innerHTML="<b>"+head+"</b>"+(d?'<div class="d">'+d+"</div>":"");
     const ar=document.createElement("div");ar.className="actrow";
@@ -4325,6 +4686,7 @@ function showEnding(key){
   G.over=true;stopWalk();lsDel(SAVEKEY);
   META.wins[G.diffI]++;saveMeta();
   award(key);if(G.diffI===3)award("witness");
+  recordBoard(true,key);
   const p=G.p;
   const T={
    strike:["THE ARGUMENT","You put out the light that was reading you. Above, a mountain forgets why it was listening. Every ledger in the dark goes blank at once."],
@@ -4348,10 +4710,12 @@ function die(cause){
   if(G.over)return;
   G.over=true;stopWalk();lsDel(SAVEKEY);
   const p=G.p,lost=totalUnbanked();
+  recordBoard(false,cause);
   const pools=activePools().map(id=>(G.p.pools[id].fork||(POOLS[id]?POOLS[id].n:id))+" "+G.p.pools[id].lvl).join(" · ");
   const e=el("end");
   e.className="screen on dead";
   e.innerHTML="<h2>UNMADE</h2>"+
+   '<div class="sub" style="letter-spacing:2px">'+(p.name||"")+"</div>"+
    '<div class="sub">by '+cause+", at "+(G.depth*50)+" feet</div>"+
    '<div class="stats">'+pools+"<br>"+
    (p.shard?p.shard.name+" · "+p.shard.cls+" "+p.shard.rating+" · shard level "+p.shard.lvl+"<br>":"")+
@@ -4402,6 +4766,7 @@ function buildToneDial(){
   el("toneLbl").textContent=TONE<=1?"silent":TONE<=3?"dry":TONE<=6?"present":"heckling";
 }
 el("btnNew").onclick=startCreate;
+el("btnBoard").onclick=openBoard;
 el("btnHelp").onclick=openHelp;
 el("mClose").onclick=closeModal;
 el("mClose2").onclick=closeModal;

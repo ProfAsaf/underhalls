@@ -1955,7 +1955,7 @@ function genLevel(depth,first){
   G.mons=[];G.items=[];G.threshold=null;G.wallHp={};
   G.hostedHere=false;G.tookDmgThisFloor=false;G.explored80=false;
   G.veinsTotal=veins;G.veinsDug=0;
-  G.floorTurns=0;G.nextAudit=0;G.supHint=0;
+  G.floorTurns=0;G.nextAudit=0;G.supHint=0;G._targeting=null;G._spellTarget=null;
   if(G.p){const om=G.p.maxDepth||1;G.p.maxDepth=Math.max(om,depth);
     if(G.p.god===1&&G.p.maxDepth>om)G.p.piety=(G.p.piety||0)+1;}
   if(depth===24){
@@ -2500,7 +2500,7 @@ function playerAttack(m){
   if(p.status.brand>0){dmg*=3;notes.push("branded")}
   G._slept=wasAsleep;
   const dead=damageMon(m,dmg,p.org.id);
-  if(!dead)msg("You hit the "+m.def.n+" ("+dmg+(notes.length?", "+notes.join(", "):"")+").","mg-hit");
+  if(!dead)msg("You hit the "+m.def.n+" ("+dmg+(notes.length?", "+notes.join(", "):"")+"). "+Math.max(0,Math.ceil(m.hp))+"/"+m.mhp+" left.","mg-hit");
   const vp=behv("vamp");
   if(vp)p.hp=Math.min(p.mhp,p.hp+Math.max(1,Math.floor(dmg*vp/100)));
   if(!dead&&behv("procBurn")&&ri(1,100)<=behv("procBurn")){
@@ -3115,6 +3115,14 @@ function teleportPlayer(range){
   }
   if(spots.length){const s=pick(spots);p.x=s.x;p.y=s.y;fov()}
 }
+function armTarget(k){
+  const p=G.p;
+  const foes=G.mons.filter(m=>!m.ally&&monSeen(m)&&losClear(p.x,p.y,m.x,m.y)&&dist(p.x,p.y,m.x,m.y)<=7);
+  if(foes.length<=1){G._spellTarget=foes[0]||null;castSpell(k);return}
+  G._targeting=k;G._spellTarget=null;
+  msg("Tap a foe to aim "+SPELLS[k].n+". Tap yourself to cancel.","mg-mag");
+  draw();
+}
 function castSpell(k){
   if(G.p.status.nul>0){msg("You reach for the words. Someone is holding them.","mg-dmg");return}
   const p=G.p,sd=SPELLS[k];
@@ -3138,7 +3146,8 @@ function castSpell(k){
   }
   if(k==="mirror"){spawnClone(14);endTurn();return}
   if(k==="mm"||k==="frost"||k==="orb"){
-    const t=nearestTarget(1,7);
+    const t=G._spellTarget&&G.mons.includes(G._spellTarget)&&monSeen(G._spellTarget)?G._spellTarget:nearestTarget(1,7);
+    G._spellTarget=null;
     if(!t){msg("No target in sight.","mg-sys");p.sp+=cost;return}
     let dmg=k==="mm"?dice(1,4,Math.floor(lvl/2)):dice(3,6,Math.floor(lvl/2));
     if(k==="orb"&&t.def.fl.undead)dmg*=2;
@@ -3146,7 +3155,7 @@ function castSpell(k){
     if(k==="frost"){const e2=monElScale(t,dmg,"frost");dmg=e2.d;btag=e2.t}
     t.asleep=false;t.aware=true;
     const dead=dmg>0?damageMon(t,dmg,p.org.id):false;
-    msg("The bolt strikes the "+t.def.n+" ("+dmg+btag+")"+(dead?": destroyed.":"."),"mg-mag");
+    msg("The bolt strikes the "+t.def.n+" ("+dmg+btag+")"+(dead?": destroyed.":". "+Math.max(0,Math.ceil(t.hp))+"/"+t.mhp+" left."),"mg-mag");
   }else if(k==="fball"){
     const t=nearestTarget(1,7);
     if(!t){msg("No target in sight.","mg-sys");p.sp+=cost;return}
@@ -3882,11 +3891,26 @@ function draw(){
         CTX.fillStyle="#c05a4a";CTX.globalAlpha=.8;
         CTX.fillText(m.def.g,dx,dy);CTX.globalAlpha=1;
       }
-    }else if(m.detected&&G.seen[m.y][m.x]){
+    }else if(m.detected){
       if(!(mk2&&blit(mk2,bX,bY,ts,.32))){
-        CTX.fillStyle="#565b66";CTX.globalAlpha=.5;
+        CTX.fillStyle=m.ally?"#7ee0c8":"#8f7ae0";CTX.globalAlpha=.6;
         CTX.fillText(m.def.g,dx,dy);CTX.globalAlpha=1;
       }
+      CTX.strokeStyle="#8f7ae0";CTX.globalAlpha=.35;CTX.lineWidth=1;
+      CTX.beginPath();CTX.arc(dx,dy,ts*0.42,0,6.2832);CTX.stroke();CTX.globalAlpha=1;
+    }
+  }
+  if(G._targeting){
+    for(const m of G.mons){
+      if(m.ally||!monSeen(m)||!losClear(G.p.x,G.p.y,m.x,m.y)||dist(G.p.x,G.p.y,m.x,m.y)>7)continue;
+      if(m.x<ox||m.y<oy||m.x>=ox+VW||m.y>=oy+VH)continue;
+      const rx=px+(m.x-ox)*ts,ry=py+(m.y-oy)*ts;
+      CTX.strokeStyle="#ff5a4a";CTX.lineWidth=2;CTX.globalAlpha=.9;
+      CTX.strokeRect(rx+1,ry+1,ts-2,ts-2);
+      CTX.globalAlpha=.55;CTX.beginPath();
+      CTX.moveTo(rx+ts/2,ry-3);CTX.lineTo(rx+ts/2,ry+ts+3);
+      CTX.moveTo(rx-3,ry+ts/2);CTX.lineTo(rx+ts+3,ry+ts/2);CTX.stroke();
+      CTX.globalAlpha=1;
     }
   }
   const look=playerLook();
@@ -4089,6 +4113,15 @@ function canvasTap(e){
   const tx=ox+Math.floor((e.clientX-r.left-px)/ts),ty=oy+Math.floor((e.clientY-r.top-py)/ts);
   if(tx<0||ty<0||tx>=MW||ty>=MH)return;
   const p=G.p;
+  if(G._targeting){
+    const k=G._targeting;
+    if(tx===p.x&&ty===p.y){G._targeting=null;msg("Aim released.","mg-sys");draw();return}
+    const tm=monAt(tx,ty);
+    if(tm&&!tm.ally&&monSeen(tm)&&losClear(p.x,p.y,tm.x,tm.y)&&dist(p.x,p.y,tm.x,tm.y)<=7){
+      G._targeting=null;G._spellTarget=tm;castSpell(k);return;
+    }
+    msg("No clear shot there. Tap a visible foe, or tap yourself to cancel.","mg-sys");return;
+  }
   if(tx===p.x&&ty===p.y){ctxAction();return}
   const d=dist(p.x,p.y,tx,ty);
   const m=monAt(tx,ty);
@@ -4293,7 +4326,7 @@ function openCast(){
     const r=document.createElement("div");
     r.className="row pickable"+(G.p.sp<SPELLS[k].sp?" dis":"");
     r.innerHTML="<b>"+SPELLS[k].n+" ("+SPELLS[k].sp+" SP)</b>"+'<div class="d">'+SPELLS[k].tx+"</div>";
-    r.onclick=()=>{closeModal();castSpell(k)};
+    r.onclick=()=>{closeModal();if(k==="mm"||k==="frost"||k==="orb")armTarget(k);else castSpell(k)};
     L.appendChild(r);
   }
 }
@@ -4434,7 +4467,7 @@ function openMonModal(m){
   const pct=m.hp/m.mhp;
   const cond=m.ally?"bound to you":pct>=1?"unhurt":pct>.7?"scratched":pct>.4?"wounded":pct>.15?"badly wounded":"near death";
   mrow(L,'<span style="color:'+d.c+'">'+d.g+"</span> "+d.n,
-    cond+(m.asleep?" · asleep":m.aware?" · has your scent":" · unaware"));
+    Math.max(0,Math.ceil(m.hp))+"/"+m.mhp+" HP · "+cond+(m.asleep?" · asleep":m.aware?" · has your scent":" · unaware"));
   const msv=mSpd(m),svw=msv>=1.35?"very quick":msv>=1.15?"quick":msv>=0.86?"steady":msv>=0.65?"slow":"crawling";
   mrow(L,"Hits for "+d.dmg[0]+"d"+d.dmg[1],"AC "+d.ac+" · "+svw+" (x"+msv.toFixed(2)+")"+(m.hst>0?" · HASTED":"")+(m.slw>0?" · SLOWED":"")+(m.afraid>0?" · BROKEN":"")+(d.fl.uq?" · NAMED":""));
   if(d.prt)mrow(L,"PRT file",d.prt+(m.phased?" · PHASED OUT":""));

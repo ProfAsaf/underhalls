@@ -673,7 +673,7 @@ function readNote(it){
   removeInv(it);
   if(it.id!==undefined)p.found[it.id]=1;
   tag("scribe",Math.floor(6*stratumMult(G.depth)));
-  openModal("THE PAPER TRAIL");
+  openModal("THE PAPER TRAIL",G.p.inv.length?openInv:null);
   const L=el("mList");
   mrow(L,'"'+N.t+'"','<i>'+N.b+"</i>","");
   const c=Object.keys(p.found).length;
@@ -852,7 +852,7 @@ function checkSecondTrigger(){
   renderHud();
 }
 function shardFeed(){/* shards no longer grow from kills. Only triggers deepen them. */}
-const BUILD="v12 · 15 Jul";
+const BUILD="v13 · 15 Jul";
 const INVMAX=30;
 /* ============ items ============ */
 const WEAPONS={
@@ -1116,7 +1116,7 @@ const AFFIX_TX={
  "of Free Action":"Immune to being stunned, grappled, or knocked down."
 };
 function affixModal(it){
-  openModal("EXAMINE");
+  openModal("EXAMINE",openInv);
   const L=el("mList");
   const d=(it.t==="wep"?WEAPONS:it.t==="bow"?BOWS:it.t==="arm"?ARMORS:it.t==="shl"?SHIELDS:null);
   const base=d?d.n:(it.t==="ring"?"a ring":it.t==="crown"?"a circlet":"an item");
@@ -1135,7 +1135,7 @@ function affixModal(it){
   if(it.pre===undefined&&it.suf===undefined&&!it.b)mrow(L,"Plain","No marks, no enchantment. Honest steel.");
 }
 function openItemModal(it){
-  openModal("PROVENANCE");
+  openModal("PROVENANCE",openInv);
   const L=el("mList");
   const hd=document.createElement("div");
   hd.className="row shardrow";
@@ -1721,7 +1721,7 @@ function openBoard(){
 function boardDetail(i){
   let b=[];try{b=JSON.parse(lsGet("uh2board")||"[]")}catch(e){}
   const e=b[i];if(!e){openBoard();return}
-  openModal(e.n+(e.won?" \u2605":""));
+  openModal(e.n+(e.won?" \u2605":""),openBoard);
   const L=el("mList");
   mrow(L,"The line",e.race+(e.org?" \u00b7 "+e.org:""));
   mrow(L,e.won?"Ascended":"Unmade",(e.cause?(e.won?"by way of ":"by ")+e.cause+", ":"")+"at "+(e.depth*50)+" feet");
@@ -1730,10 +1730,6 @@ function boardDetail(i){
   if(e.arts&&e.arts.length)mrow(L,"Named finds",e.arts.join(", "));
   if(e.prt)mrow(L,"PRT contacts",e.prt+" filed");
   mrow(L,"Filed",agoStr(e.when));
-  const r=document.createElement("div");r.className="row";
-  r.innerHTML="<b>\u2190 Back to the Record</b>";
-  r.onclick=openBoard;
-  L.appendChild(r);
 }
 function newGame(race,org,rolls,diffI){
   const DF=DIFFS[diffI===undefined?1:diffI];
@@ -4296,7 +4292,12 @@ function dollSVG(){
   return s;
 }
 /* ============ modals ============ */
-function openModal(title){el("mTitle").textContent=title;el("mList").innerHTML="";el("modal").classList.add("on")}
+function openModal(title,back){
+  el("mTitle").textContent=title;el("mList").innerHTML="";el("modal").classList.add("on");
+  const b=el("mClose");
+  if(back){b.textContent="\u2039 Back";b.onclick=()=>{try{back()}catch(e){closeModal()}}}
+  else{b.textContent="Close";b.onclick=closeModal}
+}
 function closeModal(){el("modal").classList.remove("on")}
 function choiceModal(title,opts){
   openModal(title);
@@ -4311,7 +4312,7 @@ function choiceModal(title,opts){
 }
 function openInv(){
   if(!G||G.over)return;
-  openModal("PACK ("+G.p.inv.length+"/22)");
+  openModal("PACK ("+G.p.inv.length+"/"+INVMAX+")");
   const L=el("mList"),p=G.p;
   const hd=document.createElement("div");
   hd.className="dollbox";
@@ -4408,12 +4409,13 @@ function openInv(){
     if(it.t==="note")mk("Read",()=>{readNote(it)});
     if(it.t==="dev")mk("Use",()=>{closeModal();useDevice(it)});
     if(it.t==="gren")mk("Throw",()=>{closeModal();throwGren(it)});
-    if(it.t==="ammo")mk("Load",()=>{closeModal();loadAmmo(it)});
-    if(it.t==="crate")mk("Open",()=>{closeModal();openCrate(it)});
+    if(it.t==="ammo")mk("Load",()=>{closeModal();loadAmmo(it);if(!G.over)openInv()});
+    if(it.t==="crate")mk("Open",()=>{closeModal();openCrate(it);if(!G.over)openInv()});
     mk("Drop",()=>{removeInv(it);
       const so=slotOf(it);if(so)p.eq[so]=null;
       G.items.push({x:p.x,y:p.y,it});
-      msg("You drop "+aName(it)+".","mg-sys");closeModal();endTurn()});
+      msg("You drop "+aName(it)+".","mg-sys");closeModal();endTurn();
+      if(!G.over&&G.p.inv.length)openInv()});
     if(it.art)r.lastChild.appendChild(a);else r.appendChild(a);
     L.appendChild(r);
    }catch(err){
@@ -4591,7 +4593,7 @@ function shardLive(s){
 }
 function openMe(){
   const p=G.p;
-  openModal("YOUR LEDGER");
+  openModal("YOUR LEDGER",openCamp);
   const L=el("mList");
   mrow(L,p.name||"Unnamed",p.race.name+" "+p.org.name+(p.bg?" · formerly "+p.bg.n:""));
   if(p.bg)mrow(L,"Outstanding",p.bg.debt);
@@ -5059,7 +5061,6 @@ el("btnNew").onclick=startCreate;
 el("btnBoard").onclick=openBoard;
 {const bl=el("buildLine");if(bl)bl.textContent="build "+BUILD;}
 el("btnHelp").onclick=openHelp;
-el("mClose").onclick=closeModal;
 el("mClose2").onclick=closeModal;
 el("crBack").onclick=()=>{if(CR.step===0)show("title");else{CR.step--;renderCreate()}};
 el("crNext").onclick=()=>{if(CR.step<2){CR.step++;renderCreate()}else{CR.step=3;show("sheet");renderSheet()}};

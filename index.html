@@ -485,7 +485,7 @@ const POOLS={
       {lv:14,n:"No Vacancy",b:{ac:1,save:1}},{lv:18,n:"Grand Suite",b:{restb:2,mhp:6}}],
   forks:[{n:"Sanctuary Keeper",need:"camp",b:{restb:2,threshold:1},d:"The room heals its guests."},
          {n:"Toll Keeper",need:"gold",b:{goldb:2},d:"Everyone pays at the door."}]},
- cartographer:{n:"Cartographer",tags:["travel","lore"],
+ cartographer:{n:"Cartographer",tags:["travel","lore","earth"],
   sk:[{lv:2,n:"Steady Hand",b:{exploreb:1}},{lv:4,n:"Dead Reckoning",b:{save:1}},{lv:6,n:"Margin Notes",b:{infra:1}},
       {lv:8,n:"Survey Eye",b:{exploreb:1}},{lv:10,n:"True North",b:{exploreb:1,stealth:1},key:1,keytx:"Stairs are marked on entry."},
       {lv:14,n:"Contour Sense",b:{ac:1}},{lv:18,n:"Atlas Mind",b:{save:2,spb:3}}],
@@ -497,7 +497,7 @@ const POOLS={
       {lv:14,n:"Quiet Congregation",b:{ac:1,thrall:1}},{lv:18,n:"Standing Orders",b:{dmg:2}}],
   forks:[{n:"Pale Shepherd",need:"safe",b:{thrall:1,save:2},d:"The flock grows."},
          {n:"Gravedigger",need:"dmg",b:{dmg:2,critc:5},d:"Supply-side necromancy."}]},
- gambler:{n:"Gambler",tags:["gold","chance"],
+ gambler:{n:"Gambler",tags:["gold","chance","host"],
   sk:[{lv:2,n:"Loaded Dice",b:{luck:3}},{lv:4,n:"House Edge",b:{goldb:1}},{lv:6,n:"Card Up the Sleeve",b:{save:1}},
       {lv:8,n:"Double Down",b:{critc:6}},{lv:10,n:"JACKPOT",b:{luck:5,goldb:1},key:1,keytx:"Crates hold one extra find."},
       {lv:14,n:"Cold Streak Insurance",b:{ac:1,save:1}},{lv:18,n:"The Long Con",b:{luck:6}}],
@@ -768,9 +768,14 @@ function checkSecondTrigger(){
   if(!s||s.second||G.depth<16||p.hp<=0)return;
   if(p.hp>=0.1*p.mhp||s.lvl<5)return;
   s.second=true;
+  const oldBase=CLASSIF[s.cls].mk(s.rating);
+  const earnedMag=Math.max(0,s.mag-oldBase.mag);
+  const earnedCd=Math.max(0,oldBase.cd-s.cdMax);
   s.rating=clamp(s.rating+2,2,9);
   const re=CLASSIF[s.cls].mk(s.rating);
-  s.mag=re.mag;s.cdMax=Math.max(3,re.cd-4);s.desc=re.d;
+  s.mag=re.mag+earnedMag;
+  s.cdMax=Math.max(3,re.cd-4-earnedCd);
+  s.desc=re.d;
   const newDb=Object.keys(DRAWS).filter(k=>!s.db.includes(k));
   if(newDb.length)s.db.push(pick(newDb));
   announce("Second trigger. "+s.name+" is "+s.cls+" "+s.rating+" now.","shard",true);
@@ -788,7 +793,7 @@ function shardFeed(monDef){
   if(s.xp>=need){s.xp-=need;s.lvl++;s.mag++;s.cdMax=Math.max(3,s.cdMax-1);
     announce(s.name+" deepens. Shard level "+s.lvl+".","shard",true)}
 }
-const BUILD="v6 · 14 Jul";
+const BUILD="v10 · 14 Jul";
 const INVMAX=30;
 /* ============ items ============ */
 const WEAPONS={
@@ -1517,7 +1522,8 @@ function openAltar(x,y){
     const cost=Math.floor(p.mhp/3);
     if(p.hp<=cost){msg("It declines to take the last of you.","mg-sys");return}
     p.hp-=cost;G.items.push({x,y,it:genRelic(G.depth+2)});
-    announce("The ledger balances. Something with a name is issued.","watch",true);done()}});
+    announce("The ledger balances. Something with a name is issued.","watch",true);
+    checkTrigger();checkSecondTrigger();done()}});
   if(kind===1)opts.push({label:A.a,desc:p.eq.w?A.r:"(You have no weapon readied.)",fn:()=>{
     const w=p.eq.w;
     if(!w){msg("Empty pans weigh nothing.","mg-sys");return}
@@ -1721,12 +1727,14 @@ function activatePool(id,isOrigin){
 }
 function xpNeedPool(id,lvl){
   const p=G.p;
-  const mult=(p.race.xp/100)*(id===p.org.id?(p.org.xp/100):1)*G.diff.xr;
+  const mult=(p.race.xp/100)*(id===orgPoolId()?(p.org.xp/100):1)*G.diff.xr;
   return Math.floor(10*Math.pow(lvl,2.1)*mult)+lvl*5;
 }
+function orgPoolId(){const p=G.p;return (p.orgPool&&p.pools[p.orgPool])?p.orgPool:p.org.id}
 function tag(id,amt){
   const p=G.p;
   if(amt<=0)return;
+  if(id===p.org.id)id=orgPoolId();
   if(!p.pools[id]){
     if(!activatePool(id)){p.unb[p.org.id]=(p.unb[p.org.id]||0)+Math.floor(amt*.25);return}
   }
@@ -1757,7 +1765,7 @@ function checkEvolve(){
   if(charLvl()<E.lvl||G.depth<E.dep)return;
   if(E.undead&&(p.ct.undead||0)<E.undead)return;
   p.evolved=E.key;
-  gainSk(p.pools[p.org.id],E.key,E.b);
+  {const op=p.pools[orgPoolId()];if(op)gainSk(op,E.key,E.b);}
   announce(E.key+". "+E.line,"watch",true);
   award("evolved");
 }
@@ -1844,7 +1852,7 @@ function hasFlag(key){
   if(bonus(key)>0)return true;
   return false;
 }
-function charLvl(){return G.p.pools[G.p.org.id].lvl}
+function charLvl(){const pl=G.p.pools[orgPoolId()];return pl?pl.lvl:1}
 function spMax(){
   const p=G.p,org=p.org;
   if(org.stat<0||!org.book.length)return 0;
@@ -2689,6 +2697,7 @@ function endTurn(){
   const st=p.status;
   if(st.pois>0){st.pois--;p.hp-=1;
     if(p.hp<=0){die("poison");return}
+    checkTrigger();checkSecondTrigger();
     if(st.pois===0)msg("The poison runs its course.","mg-good")}
   if(st.held>0&&!G.mons.some(m2=>!m2.ally&&GRABBERS.includes(m2.def.n)&&dist(m2.x,m2.y,p.x,p.y)<=1)){
     st.held=0;msg("You tear free.","mg-good");
@@ -3051,7 +3060,7 @@ function monHitPlayer(m){
   if(fl.drainX){let any=false;
     const f=behv("unbGuard")?0.92:0.7;
     for(const k in p.unb){if(p.unb[k]>0)any=true;p.unb[k]=Math.floor(p.unb[k]*f)}
-    if(!any){const pool=p.pools[p.org.id];pool.xp=Math.max(0,pool.xp-20)}
+    if(!any){const pool=p.pools[orgPoolId()];if(pool)pool.xp=Math.max(0,pool.xp-20)}
     msg("You feel your promise dim.","mg-dmg")}
   if(fl.drainH){m.hp=Math.min(m.mhp,m.hp+Math.ceil(dmg/2))}
   if(fl.thief){
@@ -3297,7 +3306,8 @@ function usePower(){
   if(s.db.includes("migraine"))p.status.migraine=3;
   if(s.db.includes("splock")&&p.msp>0){p.sp=0;msg("Your magic is collateral.","mg-dmg")}
   if(s.db.includes("feedback")){const fb=dice(1,4);p.hp-=fb;msg("Feedback ("+fb+").","mg-dmg");
-    if(p.hp<=0){die("shard feedback");return}}
+    if(p.hp<=0){die("shard feedback");return}
+    checkSecondTrigger();}
   G.lastMove=false;
   endTurn();
 }
@@ -3488,7 +3498,7 @@ function cookAct(){
       "SERAPH-OF-MEAT":["mhp",4,"You ate the second trigger. There is more of you now."]};
     const bn=B[pt.of]||["mhp",2,"You ate something with a name. Names are nourishing."];
     const b={};b[bn[0]]=bn[1];
-    gainSk(p.pools[p.org.id],"Ate "+pt.of,b);
+    {const op2=p.pools[orgPoolId()];if(op2)gainSk(op2,"Ate "+pt.of,b);}
     announce(bn[2],"watch",true);
   }
   tag("cook",Math.floor(6*stratumMult(G.depth)*n));
@@ -3526,11 +3536,11 @@ function hostAct(){
   processForks();
 }
 function eligibleMerges(){
-  const p=G.p,ids=activePools().filter(id=>id!==p.org.id&&!p.pools[id].merged&&p.pools[id].lvl>=10&&POOLS[id]);
+  const p=G.p,ids=activePools().filter(id=>!p.pools[id].merged&&p.pools[id].lvl>=10&&POOLS[id]);
   const out=[];
   for(let i=0;i<ids.length;i++)for(let j=i+1;j<ids.length;j++){
     const a=ids[i],b=ids[j];
-    if(POOLS[a].tags.some(t=>POOLS[b].tags.includes(t)))out.push([a,b]);
+    if(MERGES[[a,b].sort().join("+")]||POOLS[a].tags.some(t=>POOLS[b].tags.includes(t)))out.push([a,b]);
   }
   return out;
 }
@@ -3552,10 +3562,13 @@ function performMerge(a,b,M){
   const id="m_"+[a,b].sort().join("_");
   const merged={id,lvl:Math.max(pa.lvl,pb.lvl),xp:0,sk:pa.sk.concat(pb.sk),fork:M.n,merged:true};
   gainSk(merged,M.n+" (merge)",M.b);
+  const tookOrigin=(a===p.org.id||b===p.org.id)||(p.orgPool&&(a===p.orgPool||b===p.orgPool));
   delete p.pools[a];delete p.pools[b];
   p.pools[id]=merged;
+  if(tookOrigin)p.orgPool=id;
   award("merge");
   announce("Merge: "+M.n+", level "+merged.lvl+". There is no undo. A slot stands empty.","watch",true);
+  if(tookOrigin)announce("Your origin pours into it. Every kill feeds "+M.n+" now.","watch",true);
   if(MERGELINE[M.n])announce(MERGELINE[M.n],"watch",true);
   closeModal();renderHud();
 }
@@ -4237,7 +4250,7 @@ function openInv(){
     (p.shard?' · <span style="color:'+powerColor(p.shard)+'">'+p.shard.name+" L"+p.shard.lvl+"</span>":"")+"</div>"+
     '<div style="font-size:11px;color:var(--ink);margin-top:3px">'+STATN.map((n,i)=>n+" "+p.st[i]).join("  ")+"</div>"+
     '<div style="font-size:10px;color:var(--faint)">AC '+playerAC()+" · DR "+drTotal()+" · hit +"+meleeSkill()+" · crit "+bonus("critc")+"%</div>"+
-    (function(){const pl=p.pools[p.org.id];if(!pl)return"";
+    (function(){const pl=p.pools[orgPoolId()];if(!pl)return"";
       const need=xpNeedPool(p.org.id,pl.lvl),w=clamp(Math.round(100*pl.xp/Math.max(1,need)),0,100);
       return '<div style="font-size:10px;color:var(--dim);margin-top:5px">'+(pl.fork||p.org.name)+" level "+pl.lvl+
         ' · '+(need-pl.xp)+' to next</div>'+
@@ -4526,8 +4539,8 @@ function openMe(){
    mrow(L,"Carried on you",parts.length?parts.join("<br>"):"Nothing readied. Bold.");}
   {const ids=activePools();
    for(const id of ids){const pl=p.pools[id];
-     mrow(L,(pl.fork||(POOLS[id]?POOLS[id].n:id))+" "+pl.lvl+(id===p.org.id?" (origin)":""),
-       pl.xp+" / "+xpNeedPool(id,pl.lvl)+" to next"+(id===p.org.id?" · every kill feeds this one":" · fed only by its own work"));}
+     mrow(L,(pl.fork||(POOLS[id]?POOLS[id].n:id))+" "+pl.lvl+(id===orgPoolId()?" (origin)":""),
+       pl.xp+" / "+xpNeedPool(id,pl.lvl)+" to next"+(id===orgPoolId()?" · every kill feeds this one":" · fed only by its own work"));}
    if(ids.length<3)mrow(L,"Open slots",(3-ids.length)+" class slot(s) still empty. Doing new work fills them.");}
   {const ub=totalUnbanked();
    mrow(L,"Unbanked",ub?ub+" XP riding on you. Camp to bank it, die to lose it.":"Nothing riding. Clean.");}
@@ -4651,7 +4664,7 @@ function snapshotG(){
     p:{race:p.race,org:p.org,st:p.st,gold:p.gold,kills:p.kills,turn:p.turn,inv:p.inv,eqIdx,
        status:p.status,shard:p.shard,triggered:p.triggered,en:p.en||0,maxDepth:p.maxDepth||1,
        pools:p.pools,unb:p.unb,batch:[...p.batch],killCt:p.killCt,ct:p.ct,
-       found:p.found,codex:p.codex,visSeen:p.visSeen,name:p.name||"",bgId:(p.bg?p.bg.id:null),prtSeen:p.prtSeen||{},killCt:p.killCt||{},killStr:p.killStr||{},god:(p.god===undefined?null:p.god),piety:p.piety||0,godCd1:p.godCd1||0,godCd2:p.godCd2||0,godG:p.godG||0,godK:p.godK||0,evolved:p.evolved,
+       found:p.found,codex:p.codex,visSeen:p.visSeen,name:p.name||"",orgPool:p.orgPool||null,bgId:(p.bg?p.bg.id:null),prtSeen:p.prtSeen||{},killCt:p.killCt||{},killStr:p.killStr||{},god:(p.god===undefined?null:p.god),piety:p.piety||0,godCd1:p.godCd1||0,godCd2:p.godCd2||0,godG:p.godG||0,godK:p.godK||0,evolved:p.evolved,
        x:p.x,y:p.y,hp:p.hp,mhp:p.mhp,sp:p.sp,msp:p.msp}}});
 }
 function saveGame(){if(!G||G.over)return;lsSet(SAVEKEY,snapshotG())}
@@ -4669,7 +4682,7 @@ function restoreG(str){
     inv:rp.inv,eq:{},status:rp.status,shard:rp.shard,triggered:rp.triggered,
     en:rp.en||0,maxDepth:rp.maxDepth||g.depth||1,pools:rp.pools,unb:rp.unb,batch:new Set(rp.batch),
     killCt:rp.killCt,ct:rp.ct,found:rp.found||{},codex:rp.codex||[],
-    visSeen:rp.visSeen||{},name:rp.name||genName(),bg:(rp.bgId&&BACKS.find(b9=>b9.id===rp.bgId))||null,prtSeen:rp.prtSeen||{},killCt:rp.killCt||{},killStr:rp.killStr||{},god:(rp.god===undefined?null:rp.god),piety:rp.piety||0,godCd1:rp.godCd1||0,godCd2:rp.godCd2||0,godG:rp.godG||0,godK:rp.godK||0,evolved:rp.evolved||null,
+    visSeen:rp.visSeen||{},name:rp.name||genName(),orgPool:rp.orgPool||null,bg:(rp.bgId&&BACKS.find(b9=>b9.id===rp.bgId))||null,prtSeen:rp.prtSeen||{},killCt:rp.killCt||{},killStr:rp.killStr||{},god:(rp.god===undefined?null:rp.god),piety:rp.piety||0,godCd1:rp.godCd1||0,godCd2:rp.godCd2||0,godG:rp.godG||0,godK:rp.godK||0,evolved:rp.evolved||null,
     x:rp.x,y:rp.y,hp:rp.hp,mhp:rp.mhp,sp:rp.sp,msp:rp.msp};
   for(const s of["w","b","a","s","r1","r2","c"])p.eq[s]=rp.eqIdx&&rp.eqIdx[s]>=0?p.inv[rp.eqIdx[s]]:null;
   G={p,depth:g.depth,msgs:g.msgs||[],over:false,won:!!g.won,ach:g.ach,artsOut:g.artsOut,

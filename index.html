@@ -705,14 +705,14 @@ const DRAWS={
 const CLASSIF={
  Mover:{mk:r=>({key:"blink",mag:4+r,cd:8,d:"step "+(4+r)+" tiles sideways through nothing"})},
  Shaker:{mk:r=>({key:"gravpull",mag:r,cd:12,d:"wrench every visible foe 2 tiles and bruise them"})},
- Brute:{mk:r=>({key:"rage",mag:r,cd:16,pb:{dr:Math.ceil(r/3)},d:"passive: shrug "+Math.ceil(r/3)+" damage. Active: brief fury"})},
+ Brute:{mk:r=>({key:"rage",mag:r,cd:22,pb:{dr:Math.ceil(r/3)},d:"passive: shrug "+Math.ceil(r/3)+" damage. Active: brief fury"})},
  Breaker:{mk:r=>({key:"ghost",mag:3+Math.ceil(r/2),cd:20,d:"become untouchable mist for "+(3+Math.ceil(r/2))+" turns"})},
- Master:{mk:r=>({key:"summon",mag:Math.ceil(r/3),cd:22,d:"call "+Math.ceil(r/3)+" bound servant(s) for a while"})},
+ Master:{mk:r=>({key:"summon",mag:Math.ceil(r/3),cd:26,d:"call "+Math.ceil(r/3)+" bound servant(s) for a while"})},
  Tinker:{mk:r=>({key:"tinker",mag:r,cd:26,d:"improvise a device with "+(2+Math.ceil(r/2))+" charges"})},
  Blaster:{mk:r=>({key:"bolt",mag:r,cd:6,d:(2+Math.ceil(r/2))+"d6 at the nearest foe"})},
  Thinker:{mk:r=>({key:"mindmap",mag:r,cd:24,pb:{critc:r},d:"passive: +"+r+"% crits. Active: read the level"})},
  Striker:{mk:r=>({key:"brand",mag:r,cd:10,d:"your next blows land x3, briefly"})},
- Changer:{mk:r=>({key:"form",mag:r,cd:18,d:"borrowed shape: +STR +CON, claws, for a while"})},
+ Changer:{mk:r=>({key:"form",mag:r,cd:26,d:"borrowed shape: +STR +CON, claws, for a while"})},
  Trump:{mk:r=>({key:"nullify",mag:5+r,cd:20,d:"visible foes lose breath, spells and tricks for "+(5+r)+" turns"})},
  Stranger:{mk:r=>({key:"veil",mag:4+Math.ceil(r/2),cd:18,d:"everything forgets you for "+(4+Math.ceil(r/2))+" turns"})}};
 const KEYSTONES=[
@@ -728,45 +728,113 @@ const KEYSTONES=[
  {n:"SECONDHAND MEAT",c:"Changer",m:"blood"},{n:"MOSS MANTLE",c:"Changer",m:"moss"},
  {n:"AUDIT",c:"Trump",m:"memory"},{n:"DEAD AIR",c:"Trump",m:"sound"},
  {n:"POOR LIGHTING",c:"Stranger",m:"smoke"},{n:"FOOTNOTE",c:"Stranger",m:"starlight"}];
-function genPower(rating,forceCls){
+function genPower(rating,forceCls,noDb){
   const cls=forceCls||pick(Object.keys(CLASSIF));
   const ks=KEYSTONES.filter(k=>k.c===cls&&Math.random()<.6)[0];
   const med=ks?ks.m:pick(MEDIA)[0];
   const built=CLASSIF[cls].mk(rating);
   const nm=ks?ks.n:(capz(med)+" "+pick(["Writ","Debt","Hymn","Verdict","Toll","Lease","Clause","Echo"])).toUpperCase();
-  const dbn=rating>=7?2:rating>=4?1:Math.random()<.4?1:0;
+  const dbn=noDb?0:(rating>=7?2:rating>=4?1:Math.random()<.4?1:0);
   const dks=Object.keys(DRAWS).sort(()=>Math.random()-.5).slice(0,dbn);
   return{name:nm,cls,rating,lvl:1,xp:0,med,eff:built.key,mag:built.mag,cdMax:built.cd,cd:0,
     pb:built.pb||{},db:dks,desc:built.d};
 }
 function powerColor(pw){const m=MEDIA.find(x=>x[0]===pw.med);return m?m[1]:"#c88ae0"}
 function shardBonus(key){
-  const s=G&&G.p.shard;if(!s)return 0;
-  return(s.pb&&s.pb[key])?s.pb[key]+Math.floor((s.lvl-1)/2):0;
+  const p=G&&G.p;if(!p||!p.shards)return 0;
+  let v=0;
+  for(const s of p.shards)if(s.pb&&s.pb[key])v+=s.pb[key]+Math.floor(s.rating/3);
+  return v;
+}
+const CAUSE_CLS={
+  poison:["Changer","Brute"],
+  pinned:["Mover","Breaker"],
+  breath:["Blaster","Brute"],
+  magic:["Trump","Thinker"],
+  ranged:["Stranger","Mover"],
+  swarm:["Shaker","Master","Brute"],
+  melee:["Striker","Brute","Breaker"],
+  alone:["Thinker","Tinker","Stranger"]
+};
+const CAUSE_TX={
+  poison:"Something in your blood that is not yours",
+  pinned:"Held down, and the ceiling very close",
+  breath:"The air itself turned on you",
+  magic:"Someone rewriting you from a distance",
+  ranged:"Struck from somewhere you cannot reach",
+  swarm:"Too many hands",
+  melee:"Something with teeth, and no interest in stopping",
+  alone:"Alone, and running out"
+};
+function triggerCause(){
+  const p=G.p;
+  const near=G.mons.filter(m=>!m.ally&&m.aware&&dist(m.x,m.y,p.x,p.y)<=8);
+  const adj=near.filter(m=>dist(m.x,m.y,p.x,p.y)<=1).length;
+  if(p.status.pois>0)return "poison";
+  if(p.status.held>0||p.status.stun>0||p.status.prone>0)return "pinned";
+  if(near.some(m=>m.def.fl.breath))return "breath";
+  if(near.some(m=>m.def.fl.caster||m.def.fl.suppress||m.def.fl.nulTouch))return "magic";
+  if(near.some(m=>m.def.fl.shoot))return "ranged";
+  if(adj>=3)return "swarm";
+  if(adj>=1)return "melee";
+  return "alone";
+}
+function triggerBlast(){
+  const p=G.p;let moved=0;
+  for(const m of G.mons){
+    if(m.ally)continue;
+    if(dist(m.x,m.y,p.x,p.y)>7)continue;
+    let best=null,bd=-1;
+    for(let i=0;i<50;i++){
+      const s=freeSpot(null);if(!s)break;
+      const d=dist(s.x,s.y,p.x,p.y);
+      if(d>bd){bd=d;best=s}
+    }
+    if(best&&bd>9){m.x=best.x;m.y=best.y;m.acc=0;m.asleep=false;moved++}
+  }
+  return moved;
 }
 function checkTrigger(){
   const p=G.p;
-  if(p.shard||p.triggered||p.hp<=0)return;
-  if(p.hp>=G.diff.trig*p.mhp)return;
-  const hostiles=G.mons.filter(m=>!m.ally&&m.aware&&losClear(m.x,m.y,p.x,p.y)&&dist(m.x,m.y,p.x,p.y)<=8).length;
-  if(hostiles<2)return;
-  p.triggered=true;
-  const statuses=["pois","blind"].filter(k=>p.status[k]>0).length;
-  let D=2*(1-p.hp/p.mhp)+0.5*hostiles+0.15*G.depth+0.3*statuses+0.05*(totalUnbanked()/100);
+  if(p.hp<=0)return;
+  if(!p.shards)p.shards=[];
+  if(p.shards.length>=3)return;
+  const thr=[G.diff.trig,0.12,0.07][p.shards.length];
+  if(p.hp>=thr*p.mhp)return;
+  if(p.trigT!==undefined&&p.turn-p.trigT<150)return;
+  p.trigT=p.turn;p.triggered=true;
+  const near=G.mons.filter(m=>!m.ally&&m.aware&&dist(m.x,m.y,p.x,p.y)<=8);
+  const threat=near.reduce((a,m)=>Math.max(a,m.def.xp||0),0);
+  const tb=threat>=150?3:threat>=60?2:threat>=20?1:0;
+  const statuses=["pois","blind","stun","held","prone"].filter(k=>p.status[k]>0).length;
+  const D=2*(1-p.hp/p.mhp)+0.35*near.length+0.12*G.depth+0.3*statuses+tb;
   const rating=clamp(Math.round(D),2,9);
-  p.shard=genPower(rating);
-  announce("Trigger event.","shard",true);
-  announce(p.shard.name+". "+p.shard.cls+" "+rating+".","shard",true);
-  msg(capz(p.shard.desc)+".","mg-shard");
-  for(const d of p.shard.db)msg("Cost: "+DRAWS[d].tx+".","mg-shard");
+  const cause=triggerCause();
+  const owned=p.shards.map(s=>s.cls);
+  let poolC=(CAUSE_CLS[cause]||[]).filter(c=>!owned.includes(c));
+  if(!poolC.length)poolC=Object.keys(CLASSIF).filter(c=>!owned.includes(c));
+  const all=Object.keys(CLASSIF).filter(c=>!owned.includes(c));
+  const cls=(Math.random()<.7&&poolC.length)?pick(poolC):(all.length?pick(all):pick(Object.keys(CLASSIF)));
+  const sh=genPower(rating,cls);
+  p.shards.push(sh);p.shard=sh;
+  announce("Trigger event. "+CAUSE_TX[cause]+".","shard",true);
+  const moved=triggerBlast();
+  if(moved)announce("It goes off like a shell. "+moved+" thrown to the walls.","shard",true);
+  announce(sh.name+". "+sh.cls+" "+rating+".","shard",true);
+  msg(capz(shardLive(sh))+".","mg-shard");
+  for(const d of sh.db)msg("Cost: "+DRAWS[d].tx+".","mg-shard");
   if(TONE>=2)msg("The worst moment of your life, and something down there took notes.","mg-watch");
   award("triggered");
-  renderHud();
+  fov();renderAll();renderHud();
 }
 function checkSecondTrigger(){
-  const p=G.p,s=p.shard;
-  if(!s||s.second||G.depth<16||p.hp<=0)return;
-  if(p.hp>=0.1*p.mhp||s.lvl<5)return;
+  const p=G.p;
+  if(!p.shards||!p.shards.length||p.hp<=0||G.depth<16)return;
+  const s=p.shards.filter(x=>!x.second)[0];
+  if(!s)return;
+  if(p.hp>=0.05*p.mhp)return;
+  if(p.trigT!==undefined&&p.turn-p.trigT<150)return;
+  p.trigT=p.turn;
   s.second=true;
   const oldBase=CLASSIF[s.cls].mk(s.rating);
   const earnedMag=Math.max(0,s.mag-oldBase.mag);
@@ -783,17 +851,8 @@ function checkSecondTrigger(){
   award("second");
   renderHud();
 }
-function shardFeed(monDef){
-  const s=G.p.shard;if(!s||s.lvl>=9)return;
-  const band=Math.ceil(s.rating*2);
-  const md=(monDef.d[0]+monDef.d[1])/2;
-  if(md<band-4)return;
-  s.xp+=Math.max(1,Math.floor(monDef.xp/8));
-  const need=s.lvl*12;
-  if(s.xp>=need){s.xp-=need;s.lvl++;s.mag++;s.cdMax=Math.max(3,s.cdMax-1);
-    announce(s.name+" deepens. Shard level "+s.lvl+".","shard",true)}
-}
-const BUILD="v11 · 15 Jul";
+function shardFeed(){/* shards no longer grow from kills. Only triggers deepen them. */}
+const BUILD="v12 · 15 Jul";
 const INVMAX=30;
 /* ============ items ============ */
 const WEAPONS={
@@ -1681,7 +1740,7 @@ function newGame(race,org,rolls,diffI){
   const p={race,org,st:rolls.slice(),gold:0,kills:0,turn:0,
     inv:[],eq:{w:null,b:null,a:null,s:null,r1:null,r2:null,c:null},
     status:{pois:0,blind:0,bless:0,haste:0,shield:0,wellfed:0,rage:0,ghost:0,brand:0,veil:0,form:0,nul:0,migraine:0,winded:0},
-    shard:null,triggered:false,en:0,maxDepth:1,
+    shard:null,shards:[],triggered:false,en:0,maxDepth:1,
     name:genName(),pools:{},unb:{},batch:new Set(),killCt:{},
     ct:{dig:0,cook:0,host:0,quaffRow:0,scrKinds:{},strat:{},thresholdBlocks:0}};
   for(let i=0;i<5;i++)p.st[i]=clamp(p.st[i]+race.mods[i]+org.mods[i],3,20);
@@ -2645,7 +2704,6 @@ function killMon(m,poolId){
   p.kills++;G.ktt=(G.ktt||0)+1;G.killsFloor=(G.killsFloor||0)+1;
   if(G.ktt>=3)award("overkill");
   msg("The "+def.n+" dies. +"+xp+" unbanked"+(k===0?" (first)":"")+".","mg-good");
-  shardFeed(def);
   if(TONE>0&&Math.random()<TONE*0.02)msg(pick(QUIPS.kill),"mg-watch");
   if(m.loot)G.items.push({x:m.x,y:m.y,it:{t:"gold",v:m.loot}});
   if(def.fl.shop)stain(2,"Somewhere above, a franchise agreement catches fire.");
@@ -2737,7 +2795,7 @@ function endTurn(){
   const rr=st.wellfed>0?Math.max(2,regenRate-2-(behv("fedRegen")?1:0)):regenRate;
   if(p.turn%rr===0&&p.hp<p.mhp)p.hp++;
   if(p.turn%6===0&&p.sp<p.msp)p.sp++;
-  if(p.shard&&p.shard.cd>0)p.shard.cd--;
+  if(p.shards)for(const s9 of p.shards)if(s9.cd>0)s9.cd--;
   if(behv("goldMag")){
     for(let i=G.items.length-1;i>=0;i--){
       const gi=G.items[i];
@@ -3053,7 +3111,7 @@ function monHitPlayer(m){
   if(fl.pois&&!p.race.ab.rPois&&bonus("rPois")<=0&&Math.random()<.5){p.status.pois+=ri(3,6);msg("You are poisoned.","mg-dmg")}
   if(fl.blind&&!p.race.ab.noBlind&&bonus("noBlind")<=0&&Math.random()<.4){p.status.blind=ri(3,6);msg("Your eyes fail.","mg-dmg")}
   if(fl.nulTouch&&resFor("rNull")<=0&&Math.random()<.5){p.status.nul=Math.max(p.status.nul||0,ri(4,7));p.sp=Math.max(0,p.sp-ri(2,5));
-    if(p.shard)p.shard.cd=Math.max(p.shard.cd,4);
+    if(p.shards)for(const s8 of p.shards)s8.cd=Math.max(s8.cd,4);
     msg("Your power is a word someone else is saying.","mg-dmg")}
   if(fl.conf&&resFor("rConf")<=0&&Math.random()<.4){p.status.migraine=Math.max(p.status.migraine,ri(3,6));
     msg("The noise gets into your aim.","mg-dmg")}
@@ -3242,6 +3300,17 @@ function fireBow(){
   G.lastMove=false;
   endTurn();
 }
+function openPowerPicker(){
+  const p=G.p;
+  if(!p.shards||!p.shards.length){msg("No shard. Yet.","mg-sys");return}
+  if(p.shards.length===1){p.shard=p.shards[0];usePower();return}
+  const opts=p.shards.map(s=>({
+    label:s.name+(s.cd>0?" \u00b7 "+s.cd+" turns cold":" \u00b7 ready"),
+    desc:s.cls+" "+s.rating+" \u00b7 "+shardLive(s),
+    fn:()=>{p.shard=s;usePower()}
+  }));
+  choiceModal("WHICH SHARD",opts);
+}
 function usePower(){
   const p=G.p,s=p.shard;
   if(!s){msg("No shard. Yet.","mg-shard");return}
@@ -3249,7 +3318,7 @@ function usePower(){
   if(suppressed()){msg("Your shard goes quiet. Something nearby is holding its breath around it.","mg-shard");return}
   if(s.db.includes("movecond")&&!G.lastMove){msg("It only answers in motion.","mg-shard");return}
   if(s.db.includes("lowhp")&&p.hp>=p.mhp/2){msg("It only answers desperation.","mg-shard");return}
-  const mag=s.mag+Math.floor((s.lvl-1)/2);
+  const mag=shardMag(s);
   let acted=true;
   if(s.eff==="blink")teleportPlayer(mag);
   else if(s.eff==="gravpull"){
@@ -3274,7 +3343,7 @@ function usePower(){
     for(let i=0;i<mag&&n<mag;i++){
       const sp=[[p.x+1,p.y],[p.x-1,p.y],[p.x,p.y+1],[p.x,p.y-1],[p.x+1,p.y+1],[p.x-1,p.y-1]].find(sp=>passableFor(null,sp[0],sp[1])&&!monAt(sp[0],sp[1]));
       if(!sp)break;
-      spawnMon(pickMon(G.depth),sp[0],sp[1],true,26+s.lvl*3);n++;
+      spawnMon(pickMon(G.depth),sp[0],sp[1],true,10+s.rating);n++;
     }
     msg(n?"You call, and "+n+" answer. They do not ask why.":"No room to call.","mg-shard");
   }
@@ -3353,35 +3422,30 @@ function quaff(it){
 function drinkVial(it){
   const p=G.p;
   removeInv(it);
-  if(!p.shard){
+  if(!p.shards)p.shards=[];
+  if(p.shards.length<3){
     const opts=[];
     for(let i=0;i<3;i++){
-      const pw=genPower(it.r);
+      const pw=genPower(clamp(Math.min(it.r,4),2,4),null,true);
       opts.push({label:pw.name+" ("+pw.cls+" "+pw.rating+")",
         desc:pw.desc+(pw.db.length?". Cost: "+pw.db.map(d=>DRAWS[d].tx).join("; "):""),
-        fn:()=>{p.shard=pw;p.triggered=true;award("vialed");
-          announce("The vial takes. "+pw.name+". "+pw.cls+" "+pw.rating+".","shard",true);
+        fn:()=>{p.shards.push(pw);p.shard=pw;p.triggered=true;award("vialed");
+          announce("The vial takes, quietly. "+pw.name+". "+pw.cls+" "+pw.rating+". No cost.","shard",true);
           renderHud();endTurn()}});
     }
-    announce("Three futures settle out of suspension. Choose.","shard",true);
+    announce("Three futures settle out of suspension. Small ones, and clean. Choose.","shard",true);
     choiceModal("THE VIAL",opts);
     return;
   }
-  if(Math.random()<.35){
+  const tgt=pick(p.shards);
+  if(Math.random()<.3){
     award("deviant");
-    if(Math.random()<.5){
-      const nd=Object.keys(DRAWS).filter(k=>!p.shard.db.includes(k));
-      if(nd.length)p.shard.db.push(pick(nd));
-      announce("Deviation. "+p.shard.name+" grows a new cost: "+DRAWS[p.shard.db[p.shard.db.length-1]].tx+".","shard",true);
-    }else{
-      const old=p.shard;
-      p.shard=genPower(old.rating);
-      p.shard.lvl=old.lvl;
-      announce("Deviation. The shard sheds its shape: "+p.shard.name+" now. "+p.shard.cls+" "+p.shard.rating+".","shard",true);
-    }
+    const nd=Object.keys(DRAWS).filter(k=>!tgt.db.includes(k));
+    if(nd.length){tgt.db.push(pick(nd));
+      announce("Deviation. "+tgt.name+" grows a new cost: "+DRAWS[tgt.db[tgt.db.length-1]].tx+".","shard",true)}
+    else announce("The vial finds no room. It sits in you, doing nothing.","shard",true);
   }else{
-    p.shard.lvl=Math.min(9,p.shard.lvl+1);p.shard.mag++;
-    announce("The shard drinks. Level "+p.shard.lvl+".","shard",true);
+    msg("You are already carrying all you can carry. The vial goes down like water.","mg-sys");
   }
   renderHud();endTurn();
 }
@@ -4034,7 +4098,7 @@ function renderHud(){
   if(p.shard){
     let pips="";
     for(let i=0;i<Math.min(6,p.shard.cdMax);i++)pips+=i<p.shard.cd?"●":"○";
-    pc+='<span id="shardChip" style="color:'+powerColor(p.shard)+'">'+p.shard.name.split(" ")[0]+" L"+p.shard.lvl+" "+(p.shard.cd>0?pips:"RDY")+"</span>";
+    pc+='<span id="shardChip" style="color:'+powerColor(p.shard)+'">'+p.shard.name.split(" ")[0]+" "+p.shard.rating+(p.shards&&p.shards.length>1?"/"+p.shards.length:"")+" "+(p.shard.cd>0?pips:"RDY")+"</span>";
   }
   el("hudPools").innerHTML=pc;
   updateCtx();
@@ -4190,7 +4254,7 @@ function playerLook(){
   let alpha=1;
   if(p.status.ghost>0||p.status.veil>0)alpha=.45;
   return{col:p.status.rage>0?"#ff5a4a":armor,armor,
-    shardC:p.shard?powerColor(p.shard):null,shLvl:p.shard?p.shard.lvl:0,
+    shardC:p.shard?powerColor(p.shard):null,shLvl:p.shard?p.shard.rating:0,
     alpha,lvl:charLvl(),wepIt:p.eq.w,bowIt:p.eq.b,shl:p.eq.s};
 }
 function dollSVG(){
@@ -4256,7 +4320,7 @@ function openInv(){
       const e=p.eq[s];if(!e)return"";const k=itemKey(e);return k?sprHTML(k,34):"";
     }).join("")+"</div>":dollSVG();
   hd.innerHTML=art+'<div style="font-size:11px;color:var(--dim);margin-top:4px">'+p.race.name+" "+p.org.name+
-    (p.shard?' · <span style="color:'+powerColor(p.shard)+'">'+p.shard.name+" L"+p.shard.lvl+"</span>":"")+"</div>"+
+    (p.shard?' · <span style="color:'+powerColor(p.shard)+'">'+p.shard.name+" "+p.shard.rating+"</span>":"")+"</div>"+
     '<div style="font-size:11px;color:var(--ink);margin-top:3px">'+STATN.map((n,i)=>n+" "+p.st[i]).join("  ")+"</div>"+
     '<div style="font-size:10px;color:var(--faint)">AC '+playerAC()+" · DR "+drTotal()+" · hit +"+meleeSkill()+" · crit "+bonus("critc")+"%</div>"+
     (function(){const pl=p.pools[orgPoolId()];if(!pl)return"";
@@ -4506,7 +4570,7 @@ function openUnbModal(){
   const mult=Math.min(1.5,1+0.02*p.batch.size);
   mrow(L,"Variety bonus x"+mult.toFixed(2),p.batch.size+" distinct kinds since last bank (cap x1.50).");
 }
-function shardMag(s){return s.mag+Math.floor((s.lvl-1)/2)}
+function shardMag(s){return s.mag}
 function shardLive(s){
   const m=shardMag(s);
   switch(s.eff){
@@ -4514,7 +4578,7 @@ function shardLive(s){
     case "gravpull":return "Drag every visible foe 2 tiles toward you and hit each for "+m;
     case "rage":return "Fury for "+(8+m)+" turns (passive: shrug "+Math.ceil(s.rating/3)+" damage)";
     case "ghost":return "Untouchable mist for "+m+" turns";
-    case "summon":return "Call up to "+Math.min(m,6)+" bound servants (6 is all the room there is) for "+(26+s.lvl*3)+" turns";
+    case "summon":return "Call up to "+Math.min(m,6)+" bound servants (6 is all the room there is) for "+(10+s.rating)+" turns";
     case "tinker":return "Improvise a device with "+(2+Math.ceil(s.rating/2))+" charges";
     case "bolt":return (2+Math.ceil(m/2))+"d6 to the nearest foe";
     case "mindmap":return "Reveal the whole level and every foe on it (passive: +"+s.rating+"% crit)";
@@ -4553,8 +4617,12 @@ function openMe(){
    if(ids.length<3)mrow(L,"Open slots",(3-ids.length)+" class slot(s) still empty. Doing new work fills them.");}
   {const ub=totalUnbanked();
    mrow(L,"Unbanked",ub?ub+" XP riding on you. Camp to bank it, die to lose it.":"Nothing riding. Clean.");}
-  if(p.shard)mrow(L,"Shard: "+p.shard.name,p.shard.cls+" "+p.shard.rating+" · level "+p.shard.lvl+" · "+shardLive(p.shard));
-  else mrow(L,"Shard","None yet. Drink a vial, or nearly die with two things watching.");
+  if(p.shards&&p.shards.length){
+    for(const s of p.shards)
+      mrow(L,"Shard: "+s.name,s.cls+" "+s.rating+(s.second?"+":"")+" · "+shardLive(s)+" · cooldown "+s.cdMax+
+        (s.db.length?" · cost: "+s.db.map(d=>DRAWS[d].tx).join("; "):" · no cost"));
+    if(p.shards.length<3)mrow(L,"Room for more",(3-p.shards.length)+" more, if it comes to that. Each one costs worse than the last.");
+  }else mrow(L,"Shard","None yet. Drink a vial for a small clean one, or get low enough that something notices.");
   if(p.god!==undefined&&p.god!==null&&ALTARS[p.god]){
     const pi=p.piety||0;
     mrow(L,"Sworn to "+ALTARS[p.god].n,"Devotion "+pi+". "+(pi<3?"First boon at 3.":pi<8?"Second boon at 8.":"Both boons awake."));
@@ -4562,16 +4630,13 @@ function openMe(){
   mrow(L,"Depth",(G.depth*50)+" feet · deepest "+((p.maxDepth||1)*50)+" · "+p.gold+" gold · "+p.kills+" kills");
 }
 function openShardModal(){
-  const s=G.p.shard;
+  const p=G.p,s=p.shard;
   openModal("THE SHARD");
   const L=el("mList");
-  if(!s){mrow(L,"No shard. Yet.","Fall below 20% HP with two hostiles watching, or drink a vial.");return}
+  if(!s){mrow(L,"No shard. Yet.","Fall low enough that something notices, or drink a vial for a small clean one.");return}
   mrow(L,'<span style="color:'+powerColor(s)+'">'+s.name+"</span>",
-    s.cls+" "+s.rating+" · shard level "+s.lvl+" · "+s.xp+" / "+(s.lvl*12)+" to next");
-  mrow(L,"Effect right now",shardLive(s)+".");
-  {const born=capz(s.desc);const now=shardLive(s);
-   if(born.replace(/[.\s]/g,"")!==now.replace(/[.\s]/g,""))
-     mrow(L,"At birth",born+". Levels have carried it since.");}
+    s.cls+" "+s.rating+(s.second?" (deepened)":"")+" · cooldown "+s.cdMax+(p.shards&&p.shards.length>1?" · "+p.shards.length+" carried":""));
+  mrow(L,"Effect",shardLive(s)+".");
   for(const d of s.db)mrow(L,"Cost",capz(DRAWS[d].tx)+".");
   mrow(L,"Cooldown",s.cd>0?s.cd+" turns remaining of "+s.cdMax+".":"Ready. "+s.cdMax+" turns after use.");
   if(s.second)mrow(L,"Second trigger","It has already leaned closer once.");
@@ -4673,7 +4738,7 @@ function snapshotG(){
     p:{race:p.race,org:p.org,st:p.st,gold:p.gold,kills:p.kills,turn:p.turn,inv:p.inv,eqIdx,
        status:p.status,shard:p.shard,triggered:p.triggered,en:p.en||0,maxDepth:p.maxDepth||1,
        pools:p.pools,unb:p.unb,batch:[...p.batch],killCt:p.killCt,ct:p.ct,
-       found:p.found,codex:p.codex,visSeen:p.visSeen,name:p.name||"",orgPool:p.orgPool||null,bgId:(p.bg?p.bg.id:null),prtSeen:p.prtSeen||{},killCt:p.killCt||{},killStr:p.killStr||{},god:(p.god===undefined?null:p.god),piety:p.piety||0,godCd1:p.godCd1||0,godCd2:p.godCd2||0,godG:p.godG||0,godK:p.godK||0,evolved:p.evolved,
+       found:p.found,codex:p.codex,visSeen:p.visSeen,name:p.name||"",orgPool:p.orgPool||null,shards:p.shards||[],shardI:(p.shards&&p.shard)?Math.max(0,p.shards.indexOf(p.shard)):0,trigT:(p.trigT===undefined?undefined:p.trigT),bgId:(p.bg?p.bg.id:null),prtSeen:p.prtSeen||{},killCt:p.killCt||{},killStr:p.killStr||{},god:(p.god===undefined?null:p.god),piety:p.piety||0,godCd1:p.godCd1||0,godCd2:p.godCd2||0,godG:p.godG||0,godK:p.godK||0,evolved:p.evolved,
        x:p.x,y:p.y,hp:p.hp,mhp:p.mhp,sp:p.sp,msp:p.msp}}});
 }
 function saveGame(){if(!G||G.over)return;lsSet(SAVEKEY,snapshotG())}
@@ -4688,11 +4753,12 @@ function restoreG(str){
   TONE=d.tone!==undefined?d.tone:3;
   const g=d.g,rp=g.p;
   const p={race:rp.race,org:rp.org,st:rp.st,gold:rp.gold,kills:rp.kills,turn:rp.turn,
-    inv:rp.inv,eq:{},status:rp.status,shard:rp.shard,triggered:rp.triggered,
+    inv:rp.inv,eq:{},status:rp.status,shard:null,triggered:rp.triggered,
     en:rp.en||0,maxDepth:rp.maxDepth||g.depth||1,pools:rp.pools,unb:rp.unb,batch:new Set(rp.batch),
     killCt:rp.killCt,ct:rp.ct,found:rp.found||{},codex:rp.codex||[],
-    visSeen:rp.visSeen||{},name:rp.name||genName(),orgPool:rp.orgPool||null,bg:(rp.bgId&&BACKS.find(b9=>b9.id===rp.bgId))||null,prtSeen:rp.prtSeen||{},killCt:rp.killCt||{},killStr:rp.killStr||{},god:(rp.god===undefined?null:rp.god),piety:rp.piety||0,godCd1:rp.godCd1||0,godCd2:rp.godCd2||0,godG:rp.godG||0,godK:rp.godK||0,evolved:rp.evolved||null,
+    visSeen:rp.visSeen||{},name:rp.name||genName(),orgPool:rp.orgPool||null,shards:rp.shards||(rp.shard?[rp.shard]:[]),trigT:rp.trigT,bg:(rp.bgId&&BACKS.find(b9=>b9.id===rp.bgId))||null,prtSeen:rp.prtSeen||{},killCt:rp.killCt||{},killStr:rp.killStr||{},god:(rp.god===undefined?null:rp.god),piety:rp.piety||0,godCd1:rp.godCd1||0,godCd2:rp.godCd2||0,godG:rp.godG||0,godK:rp.godK||0,evolved:rp.evolved||null,
     x:rp.x,y:rp.y,hp:rp.hp,mhp:rp.mhp,sp:rp.sp,msp:rp.msp};
+  p.shard=p.shards[rp.shardI||0]||p.shards[0]||null;
   for(const s of["w","b","a","s","r1","r2","c"])p.eq[s]=rp.eqIdx&&rp.eqIdx[s]>=0?p.inv[rp.eqIdx[s]]:null;
   G={p,depth:g.depth,msgs:g.msgs||[],over:false,won:!!g.won,ach:g.ach,artsOut:g.artsOut,
     uniqDead:g.uniqDead,balrogDead:g.balrogDead,crew:g.crew||null,reading:g.reading||null,visitStage:g.visitStage||0,
@@ -4942,7 +5008,7 @@ function die(cause){
    '<div class="sub" style="letter-spacing:2px">'+(p.name||"")+"</div>"+
    '<div class="sub">by '+cause+", at "+(G.depth*50)+" feet</div>"+
    '<div class="stats">'+pools+"<br>"+
-   (p.shard?p.shard.name+" · "+p.shard.cls+" "+p.shard.rating+" · shard level "+p.shard.lvl+"<br>":"")+
+   ((p.shards&&p.shards.length)?p.shards.map(s=>s.name+" · "+s.cls+" "+s.rating).join("<br>")+"<br>":"")+
    "<b>"+p.kills+"</b> kills · <b>"+p.gold+"</b> gold · <b>"+p.turn+"</b> turns<br>"+
    "<b>"+lost+"</b> unbanked XP, forfeit</div>"+
    '<div style="color:var(--watch);font-size:12px">['+pick(QUIPS.death)+"]</div>"+
@@ -5008,7 +5074,7 @@ el("vInv").onclick=openInv;
 el("vCast").onclick=openCast;
 el("vFire").onclick=()=>{stopWalk();fireBow()};
 el("vCamp").onclick=openCamp;
-el("vPower").onclick=()=>{stopWalk();usePower()};
+el("vPower").onclick=()=>{stopWalk();openPowerPicker()};
 el("vLog").onclick=openLogModal;
 el("hudPools").addEventListener("click",e=>{
   if(!G)return;

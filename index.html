@@ -787,6 +787,7 @@ function shardFeed(monDef){
   if(s.xp>=need){s.xp-=need;s.lvl++;s.mag++;s.cdMax=Math.max(3,s.cdMax-1);
     announce(s.name+" deepens. Shard level "+s.lvl+".","shard",true)}
 }
+const INVMAX=30;
 /* ============ items ============ */
 const WEAPONS={
  dagger:{n:"Dagger",d:[1,4],hit:1,minD:0},pick_axe:{n:"Pick",d:[1,5],blunt:1,minD:0,pickax:1},
@@ -1073,11 +1074,19 @@ function openItemModal(it){
   const hd=document.createElement("div");
   hd.className="row shardrow";
   hd.style.display="flex";hd.style.gap="10px";hd.style.alignItems="center";
+  const bd=(it.t==="wep"?WEAPONS:it.t==="bow"?BOWS:it.t==="arm"?ARMORS:it.t==="shl"?SHIELDS:null)||null;
+  const bdd=bd?bd[it.k]:null;
+  let sub;
+  if((it.t==="wep"||it.t==="bow")&&bdd&&bdd.d)
+    sub=bdd.n+" · "+bdd.d[0]+"d"+bdd.d[1]+" base"+(it.b?" · +"+it.b+" to hit and damage":"");
+  else if((it.t==="arm"||it.t==="shl")&&bdd&&typeof bdd.ac==="number")
+    sub=bdd.n+" · AC "+bdd.ac+(it.b?" +"+it.b+" = "+(bdd.ac+it.b):"");
+  else sub=itemName(it);
   hd.innerHTML=relicSVG(it,84)+'<div><b style="color:'+(it.relic?relicHue(it):"#ffd700")+'">'+it.art+
-    '</b><div class="d">'+itemName(it)+"</div></div>";
+    '</b><div class="d">'+sub+"</div></div>";
   L.appendChild(hd);
   if(it.lore)mrow(L,"History",'<i>'+it.lore+"</i>");
-  if(it.x&&Object.keys(it.x).length)mrow(L,"Virtues",skillLine(it.x));
+  if(it.x&&Object.keys(it.x).length)mrow(L,"Virtues",virtueLine(it.x));
   if(it.beh)for(const b of it.beh)mrow(L,b.curse?"Curse":"Working",capz(b.d)+".");
   if(it.curse)mrow(L,"Cursed","Its extra strength is not free.");
 }
@@ -1268,7 +1277,7 @@ function openShop(m){
     r.innerHTML="<b>"+itemName(it)+"</b>"+'<div class="d">'+pr+" gold</div>";
     r.onclick=()=>{
       if(p.gold<pr){msg("Your purse disagrees.","mg-sys");return}
-      if(p.inv.length>=22){msg("Your pack is full.","mg-sys");return}
+      if(p.inv.length>=INVMAX){msg("Your pack is full.","mg-sys");return}
       p.gold-=pr;p.inv.push(it);
       m.stock.splice(m.stock.indexOf(it),1);
       tag("gambler",Math.max(2,Math.floor(pr/8)));
@@ -1494,7 +1503,9 @@ function prayAt(kind){
     else if(kind===1){p.hp=Math.min(p.mhp,p.hp+Math.floor(p.mhp*.35));msg("The Pulse takes your side.","mg-good")}
     else{p.status.haste=Math.max(p.status.haste||0,ri(10,15));msg("The Hymn carries you.","mg-good")}
     return}
-  msg("Devotion: "+pi+". "+(pi<3?"It wants more.":"Its gifts are resting."),"mg-sys");
+  if(pi<3)msg("Devotion "+pi+"/3. It wants more before it gives anything.","mg-sys");
+  else{const w1=Math.max(0,(p.godCd1||0)-p.turn),w2=Math.max(0,(p.godCd2||0)-p.turn);
+    msg("Devotion "+pi+". Its gifts are resting: "+(w1>0?w1+" turns":"ready")+(pi>=8?", greater in "+(w2>0?w2+" turns":"ready"):", greater at devotion 8")+".","mg-sys")}
 }
 function openAltar(x,y){
   const p=G.p,kind=G.altars[x+","+y]===undefined?0:G.altars[x+","+y],A=ALTARS[kind];
@@ -2446,7 +2457,7 @@ function pickUp(){
     if(behv("goldXp"))tag("gambler",Math.max(1,Math.floor(gv/40)));
     if(p.gold>=2000)award("pockets");
     G.items.splice(idx,1);endTurn();return}
-  if(p.inv.length>=22){msg("Your pack is full.","mg-sys");return}
+  if(p.inv.length>=INVMAX){msg("Your pack is full.","mg-sys");return}
   p.inv.push(it);G.items.splice(idx,1);
   msg("You pick up "+aName(it)+".","mg-gold");
   if(it.t==="pot"&&mergeActive("Grimoirist")&&!G.idPot[it.k]){G.idPot[it.k]=true;msg("You know this one on sight.","mg-good")}
@@ -3248,7 +3259,7 @@ function usePower(){
     msg(n?"You call, and "+n+" answer. They do not ask why.":"No room to call.","mg-shard");
   }
   else if(s.eff==="tinker"){
-    if(p.inv.length>=22)msg("Your pack is full. The idea evaporates.","mg-sys");
+    if(p.inv.length>=INVMAX)msg("Your pack is full. The idea evaporates.","mg-sys");
     else{const d={t:"dev",k:pick(Object.keys(DEVICES)),ch:2+Math.ceil(s.rating/2)};
       p.inv.push(d);msg("You improvise: "+itemName(d)+".","mg-shard")}
   }
@@ -3556,6 +3567,7 @@ function openCamp(){
     {label:"Host a ritual"+(G.hostedHere?" (done here)":""),desc:"Once per floor. Small heal, a blessing, Innkeeper's trade.",fn:hostAct},
     {label:"Merge classes",desc:eligibleMerges().length?"Offers available.":"Requires two side classes at 10+ sharing ground.",fn:mergeAct},
     {label:"Save slots",desc:"Scratch this descent into one of ten notches, or load another.",fn:openSlots},
+    {label:"Your ledger",desc:"Everything the Watcher has on you: stats, coverage, classes, shard.",fn:openMe},
     {label:"Leave to title",desc:"Stop here without dying. Your descent is saved; resume with Continue.",fn:leaveToTitle},
   ];
   choiceModal("CAMP",opts);
@@ -4272,7 +4284,14 @@ function openInv(){
     if(it.art){
       r.style.display="flex";r.style.gap="10px";r.style.alignItems="center";
       const tx=document.createElement("div");tx.style.flex="1";
+      const abt=(it.t==="wep"?WEAPONS:it.t==="bow"?BOWS:it.t==="arm"?ARMORS:it.t==="shl"?SHIELDS:null);
+      const abd=abt?abt[it.k]:null;
+      let aline="";
+      if((it.t==="wep"||it.t==="bow")&&abd&&abd.d)aline=abd.n+" · "+abd.d[0]+"d"+abd.d[1]+(it.b?" +"+it.b:"");
+      else if((it.t==="arm"||it.t==="shl")&&abd&&typeof abd.ac==="number")aline=abd.n+" · AC "+(abd.ac+(it.b||0));
+      else aline=it.t==="ring"?"Ring":it.t==="crown"?"Circlet":"";
       tx.innerHTML='<b style="color:'+(it.relic?relicHue(it):"#ffd700")+'">'+itemName(it)+(eq?" (readied)":"")+"</b>"+
+        (aline?'<div class="d">'+aline+"</div>":"")+
         (it.lore?'<div class="d"><i>'+it.lore+"</i></div>":"")+'<div class="d">Tap for provenance.</div>';
       r.innerHTML=relicSVG(it,48);
       r.appendChild(tx);
@@ -4391,6 +4410,35 @@ const BKEY={hit:"to hit",dmg:"damage",ac:"AC",stealth:"stealth",save:"saves",reg
  restb:"hosting",bowshot:"extra shot",backx:"backstab",threshold:"Threshold",
  critc:"% crit",exploreb:"survey",quaffsafe:"safe quaff",goldb:"vein yield",dr:"DR",
  luck:"luck",cheat:"cheat death",scrs:"% scroll saved",rPois:"poison-proof",seeInv:"sees the unseen",thrall:"extra thrall",spd:"speed"};
+const VIRTUE_TX={
+ slay:v=>"Triple damage against "+(v==="trollish"?"trollkind":v==="undead"?"the undead":v==="dragon"?"dragonkind":v),
+ brand:v=>"Adds "+v[0]+"d"+v[1]+" extra damage on every hit",
+ digfast:v=>"Digs through rubble "+(v>1?"much ":"")+"faster",
+ critc:v=>"+"+v+"% chance to crit",
+ stratb:v=>"+"+v+" damage per stratum descended. Grows as you go deeper",
+ dr:v=>"Shrug off "+v+" damage from every blow",
+ regen:v=>"Wounds close faster",
+ save:v=>"+"+v+" to saving throws",
+ infra:v=>"+"+v+" infravision. See warm creatures farther in the dark",
+ anchor:v=>v+"% to resist being thrown or pulled",
+ rPois:()=>"Resist poison",rFire:()=>"Resist fire",rFrost:()=>"Resist frost",
+ rSpore:()=>"Resist spore",rShock:()=>"Resist shock",rNull:()=>"Resist null",
+ rDisen:()=>"Resist disenchantment. Your plusses cannot be corroded",
+ rConf:()=>"A clear head. Cannot be confused",
+ freeAct:()=>"Immune to stun, grapple and knockdown",
+ noBlind:()=>"Cannot be blinded",seeInv:()=>"Sees the unseen"
+};
+function virtueLine(x){
+  const out=[];
+  for(const k in x){
+    const v=x[k];
+    if(v===undefined||v===null||v===false||v===0)continue;
+    if(VIRTUE_TX[k]){out.push(VIRTUE_TX[k](v));continue}
+    if(typeof v==="number")out.push((v>0?"+":"")+v+" "+(BKEY[k]||k));
+    else out.push(String(v)+" "+(BKEY[k]||k));
+  }
+  return out.join(" · ")||"flavor";
+}
 function skillLine(b){
   return Object.entries(b).filter(x=>x[1]).map(x=>(x[1]>0?"+":"")+x[1]+" "+(BKEY[x[0]]||x[0])).join(" · ")||"flavor";
 }
@@ -4434,6 +4482,60 @@ function openUnbModal(){
   const mult=Math.min(1.5,1+0.02*p.batch.size);
   mrow(L,"Variety bonus x"+mult.toFixed(2),p.batch.size+" distinct kinds since last bank (cap x1.50).");
 }
+function shardMag(s){return s.mag+Math.floor((s.lvl-1)/2)}
+function shardLive(s){
+  const m=shardMag(s);
+  switch(s.eff){
+    case "blink":return "Step up to "+m+" tiles through nothing";
+    case "gravpull":return "Drag every visible foe 2 tiles toward you and hit each for "+m;
+    case "rage":return "Fury for "+(8+m)+" turns (passive: shrug "+Math.ceil(s.rating/3)+" damage)";
+    case "ghost":return "Untouchable mist for "+m+" turns";
+    case "summon":return "Call up to "+Math.min(m,6)+" bound servants (6 is all the room there is) for "+(26+s.lvl*3)+" turns";
+    case "tinker":return "Improvise a device with "+(2+Math.ceil(s.rating/2))+" charges";
+    case "bolt":return (2+Math.ceil(m/2))+"d6 to the nearest foe";
+    case "mindmap":return "Reveal the whole level and every foe on it (passive: +"+s.rating+"% crit)";
+    case "brand":return "Your next blows land x3 for 6 turns";
+    case "form":return "Borrowed shape, +STR +CON and claws, for "+(12+m)+" turns";
+    case "nullify":return "Visible foes lose breath, spells and tricks for "+m+" turns";
+    case "veil":return "Everything forgets you for "+m+" turns";
+  }
+  return capz(s.desc);
+}
+function openMe(){
+  const p=G.p;
+  openModal("YOUR LEDGER");
+  const L=el("mList");
+  mrow(L,p.name||"Unnamed",p.race.name+" "+p.org.name+(p.bg?" · formerly "+p.bg.n:""));
+  if(p.bg)mrow(L,"Outstanding",p.bg.debt);
+  {let sl="";for(let i=0;i<5;i++)sl+=STATN[i]+" "+p.st[i]+" ("+(smod(p.st[i])>=0?"+":"")+smod(p.st[i])+")"+(i<4?" · ":"");
+   mrow(L,"Attributes",sl);}
+  mrow(L,"Body",p.hp+"/"+p.mhp+" HP · "+p.sp+"/"+p.msp+" SP · speed "+(pspd()>=0?"+":"")+pspd());
+  mrow(L,"In a fight","AC "+playerAC()+" · DR "+drTotal()+" · +"+meleeSkill()+" to hit · "+bonus("critc")+"% crit");
+  mrow(L,"Coverage",covStr().replace(/^Coverage: /,""));
+  {const eq=p.eq,parts=[];
+   const nm=k=>eq[k]?itemName(eq[k]):null;
+   if(nm("w"))parts.push("Hand: "+nm("w"));
+   if(nm("b"))parts.push("Sling: "+nm("b"));
+   if(nm("a"))parts.push("Body: "+nm("a"));
+   if(nm("s"))parts.push("Shield: "+nm("s"));
+   if(nm("r"))parts.push("Ring: "+nm("r"));
+   if(nm("c"))parts.push("Brow: "+nm("c"));
+   mrow(L,"Carried on you",parts.length?parts.join("<br>"):"Nothing readied. Bold.");}
+  {const ids=activePools();
+   for(const id of ids){const pl=p.pools[id];
+     mrow(L,(pl.fork||(POOLS[id]?POOLS[id].n:id))+" "+pl.lvl+(id===p.org.id?" (origin)":""),
+       pl.xp+" / "+xpNeedPool(id,pl.lvl)+" to next"+(id===p.org.id?" · every kill feeds this one":" · fed only by its own work"));}
+   if(ids.length<3)mrow(L,"Open slots",(3-ids.length)+" class slot(s) still empty. Doing new work fills them.");}
+  {const ub=totalUnbanked();
+   mrow(L,"Unbanked",ub?ub+" XP riding on you. Camp to bank it, die to lose it.":"Nothing riding. Clean.");}
+  if(p.shard)mrow(L,"Shard: "+p.shard.name,p.shard.cls+" "+p.shard.rating+" · level "+p.shard.lvl+" · "+shardLive(p.shard));
+  else mrow(L,"Shard","None yet. Drink a vial, or nearly die with two things watching.");
+  if(p.god!==undefined&&p.god!==null&&ALTARS[p.god]){
+    const pi=p.piety||0;
+    mrow(L,"Sworn to "+ALTARS[p.god].n,"Devotion "+pi+". "+(pi<3?"First boon at 3.":pi<8?"Second boon at 8.":"Both boons awake."));
+  }
+  mrow(L,"Depth",(G.depth*50)+" feet · deepest "+((p.maxDepth||1)*50)+" · "+p.gold+" gold · "+p.kills+" kills");
+}
 function openShardModal(){
   const s=G.p.shard;
   openModal("THE SHARD");
@@ -4441,7 +4543,10 @@ function openShardModal(){
   if(!s){mrow(L,"No shard. Yet.","Fall below 20% HP with two hostiles watching, or drink a vial.");return}
   mrow(L,'<span style="color:'+powerColor(s)+'">'+s.name+"</span>",
     s.cls+" "+s.rating+" · shard level "+s.lvl+" · "+s.xp+" / "+(s.lvl*12)+" to next");
-  mrow(L,"Effect",capz(s.desc)+".");
+  mrow(L,"Effect right now",shardLive(s)+".");
+  {const born=capz(s.desc);const now=shardLive(s);
+   if(born.replace(/[.\s]/g,"")!==now.replace(/[.\s]/g,""))
+     mrow(L,"At birth",born+". Levels have carried it since.");}
   for(const d of s.db)mrow(L,"Cost",capz(DRAWS[d].tx)+".");
   mrow(L,"Cooldown",s.cd>0?s.cd+" turns remaining of "+s.cdMax+".":"Ready. "+s.cdMax+" turns after use.");
   if(s.second)mrow(L,"Second trigger","It has already leaned closer once.");

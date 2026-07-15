@@ -793,7 +793,7 @@ function shardFeed(monDef){
   if(s.xp>=need){s.xp-=need;s.lvl++;s.mag++;s.cdMax=Math.max(3,s.cdMax-1);
     announce(s.name+" deepens. Shard level "+s.lvl+".","shard",true)}
 }
-const BUILD="v10 · 14 Jul";
+const BUILD="v11 · 15 Jul";
 const INVMAX=30;
 /* ============ items ============ */
 const WEAPONS={
@@ -1463,12 +1463,21 @@ function stain(n,line){
   if(line)announce(line,"watch",true);
   if(G.stain>=5)award("stained");
 }
+function devourHeal(it){
+  const d=MONS.find(m=>m.n===it.of);
+  const avg=(d&&d.hp)?d.hp[0]*(d.hp[1]+1)/2:8;
+  return clamp(Math.round(avg*0.45)+(it.uq?6:0),5,40);
+}
 function devour(it){
-  const p=G.p,si=stratumIdx(G.depth);
+  const p=G.p,heal=devourHeal(it);
   removeInv(it);
-  p.hp=Math.min(p.mhp,p.hp+4+2*si);
+  const before=p.hp;
+  p.hp=Math.min(p.mhp,p.hp+heal);
+  const got=p.hp-before;
+  msg("You devour the "+it.of+(got>0?" (+"+got+").":". There was nothing left to mend."),"mg-good");
+  if(it.uq)msg("It had a name. Cooked, it would have taught you something that lasts.","mg-watch");
   if(it.g==="h"||it.g==="e")stain(1,"You knew them, in the general sense. It goes in the file.");
-  else msg("Cold, honest calories.","mg-good");
+  else if(got>0)msg("Cold, honest calories.","mg-good");
   endTurn();
 }
 function tameTry(it){
@@ -4327,7 +4336,7 @@ function openInv(){
     if(it.t==="pot"||it.t==="vial")mk(it.t==="vial"?"Drink":"Quaff",()=>{closeModal();quaff(it)});
     if(it.t==="pot")mk("Throw",()=>{closeModal();throwPotion(it)});
     if(it.t==="meal"||it.t==="part")mk("Offer",()=>{closeModal();tameTry(it)});
-    if(it.t==="part"&&p.race.ab.ghul)mk("Devour",()=>{closeModal();devour(it)});
+    if(it.t==="part"&&p.race.ab.ghul)mk("Devour +"+devourHeal(it),()=>{closeModal();devour(it)});
     if(it.t==="meal")mk("Eat",()=>{closeModal();removeInv(it);
       G.p.status.wellfed=Math.floor(100*(1+bonus("cookb")*0.3));
       msg("You eat the ration. The dark can wait.","mg-good");endTurn()});

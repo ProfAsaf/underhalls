@@ -163,6 +163,7 @@ button.ghost{background:transparent}
   <button class="ghost" id="btnSaveCode" style="min-width:210px;color:var(--faint);font-size:12px">Save code</button>
   <div id="toneRow"><span>Watcher</span><span id="toneDots"></span><span id="toneLbl"></span></div>
   <div id="metaLine" style="font-size:10px;color:var(--faint)"></div>
+  <div id="buildLine" style="font-size:10px;color:var(--faint);opacity:.7;margin-top:4px"></div>
 </div>
 
 <div id="create" class="screen">
@@ -787,6 +788,7 @@ function shardFeed(monDef){
   if(s.xp>=need){s.xp-=need;s.lvl++;s.mag++;s.cdMax=Math.max(3,s.cdMax-1);
     announce(s.name+" deepens. Shard level "+s.lvl+".","shard",true)}
 }
+const BUILD="v6 · 14 Jul";
 const INVMAX=30;
 /* ============ items ============ */
 const WEAPONS={
@@ -4967,6 +4969,7 @@ function buildToneDial(){
 }
 el("btnNew").onclick=startCreate;
 el("btnBoard").onclick=openBoard;
+{const bl=el("buildLine");if(bl)bl.textContent="build "+BUILD;}
 el("btnHelp").onclick=openHelp;
 el("mClose").onclick=closeModal;
 el("mClose2").onclick=closeModal;
@@ -5095,8 +5098,20 @@ refreshContinue();
 el("cv").addEventListener("click",canvasTap);
 window.addEventListener("resize",()=>{if(G){sizeCanvas();draw()}});
 try{
-  if("serviceWorker" in navigator&&location.protocol==="https:")
-    navigator.serviceWorker.register("sw.js").catch(()=>{});
+  if("serviceWorker" in navigator&&location.protocol==="https:"){
+    const hadCtrl=!!navigator.serviceWorker.controller;
+    let reloaded=false;
+    navigator.serviceWorker.addEventListener("controllerchange",()=>{
+      if(!hadCtrl||reloaded)return;
+      reloaded=true;
+      try{if(G&&!G.over)saveGame()}catch(e){}
+      location.reload();
+    });
+    navigator.serviceWorker.register("sw.js").then(reg=>{
+      try{reg.update()}catch(e){}
+      setInterval(()=>{try{reg.update()}catch(e){}},60000);
+    }).catch(()=>{});
+  }
 }catch(e){}
 buildDpad();
 buildToneDial();

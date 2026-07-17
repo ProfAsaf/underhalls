@@ -852,7 +852,7 @@ function checkSecondTrigger(){
   renderHud();
 }
 function shardFeed(){/* shards no longer grow from kills. Only triggers deepen them. */}
-const BUILD="v13 · 15 Jul";
+const BUILD="v16 · 15 Jul";
 const INVMAX=30;
 /* ============ items ============ */
 const WEAPONS={
@@ -3705,14 +3705,25 @@ function applyStratumPalette(){
   PAL={wall:S.wall,floor:S.floor,acc:S.acc};
   document.documentElement.style.setProperty("--acc",S.acc);
 }
+let CW=0,CH=0,CDPR=1;
 function sizeCanvas(){
   const cv=el("cv"),st=el("stage");
-  cv.width=st.clientWidth*devicePixelRatio;
-  cv.height=st.clientHeight*devicePixelRatio;
+  const w=st.clientWidth,h=st.clientHeight;
+  if(!w||!h)return false;
+  const dpr=window.devicePixelRatio||1;
+  if(w===CW&&h===CH&&dpr===CDPR)return false;
+  CW=w;CH=h;CDPR=dpr;
+  cv.width=Math.round(w*dpr);
+  cv.height=Math.round(h*dpr);
+  cv.style.width=w+"px";
+  cv.style.height=h+"px";
   CTX=cv.getContext("2d");
-  CTX.scale(devicePixelRatio,devicePixelRatio);
+  CTX.setTransform(dpr,0,0,dpr,0,0);
   CTX.imageSmoothingEnabled=false;
+  return true;
 }
+function stageW(){if(!CW)sizeCanvas();return CW}
+function stageH(){if(!CH)sizeCanvas();return CH}
 /* ============ map zoom (pinch) ============ */
 const ZMIN=0.55,ZMAX=3;
 let ZOOM=1;
@@ -3724,7 +3735,7 @@ function setZoom(z){
 }
 let PANX=0,PANY=0,PLAST=null;
 function viewGeom(W,H){
-  if(W===undefined){const st=el("stage");W=st.clientWidth;H=st.clientHeight}
+  if(W===undefined){W=stageW();H=stageH()}
   const base=Math.min(W/29,H/19);
   const ts=Math.max(6,Math.floor(base*ZOOM));
   const p=G.p;
@@ -3749,7 +3760,7 @@ function viewGeom(W,H){
   return{W,H,ts,VW,VH,ox,oy,px,py};
 }
 function panBy(dx,dy){
-  const st=el("stage"),W=st.clientWidth,H=st.clientHeight;
+  const W=stageW(),H=stageH();
   const base=Math.min(W/29,H/19);
   const ts=Math.max(6,Math.floor(base*ZOOM));
   PANX+=dx/ts;PANY+=dy/ts;
@@ -3909,8 +3920,10 @@ function itemGlyph(it){
   return["*","#d8b25a"];
 }
 function draw(){
-  if(!G||!CTX)return;
-  const st=el("stage"),W=st.clientWidth,H=st.clientHeight;
+  if(!G)return;
+  if(!CTX||!CW||!CH)sizeCanvas();
+  if(!CTX||!CW||!CH)return;
+  const W=CW,H=CH;
   CTX.fillStyle="#000";CTX.fillRect(0,0,W,H);
   const {ts,VW,VH,ox,oy,px,py}=viewGeom(W,H);
   const p=G.p;
@@ -4202,7 +4215,7 @@ function buildDpad(){
 function canvasTap(e){
   if(LPS){LPS=false;return}
   if(!G||G.over)return;
-  const st=el("stage"),W=st.clientWidth,H=st.clientHeight;
+  const W=stageW(),H=stageH();
   const {ts,ox,oy,px,py}=viewGeom(W,H);
   const r=el("cv").getBoundingClientRect();
   const sxp=e.clientX-r.left,syp=e.clientY-r.top;
@@ -5021,9 +5034,11 @@ function die(cause){
   el("titleBtn").onclick=()=>{e.classList.remove("on");show("title")};
 }
 function winGame(){
-  G.won=true;stopWalk();
+  if(G.won)return;
+  G.won=true;G.over=true;stopWalk();
   META.wins[G.diffI]++;saveMeta();
   if(G.diffI===3)award("witness");
+  recordBoard(true,"THE FIRST TRIGGER");
   const p=G.p;
   const e=el("end");
   e.className="screen on won";
@@ -5036,7 +5051,7 @@ function winGame(){
    '<button class="primary" id="contBtn" style="min-width:200px">Keep descending</button>'+
    '<button class="ghost" id="newBtn2" style="min-width:200px;color:var(--dim)">Roll another</button>';
   hideGame();
-  el("contBtn").onclick=()=>{e.classList.remove("on");show("game");renderAll()};
+  el("contBtn").onclick=()=>{e.classList.remove("on");G.over=false;show("game");renderAll();saveGame()};
   el("newBtn2").onclick=()=>{e.classList.remove("on");startCreate()};
 }
 function hideGame(){}
@@ -5086,7 +5101,7 @@ el("hudPools").addEventListener("click",e=>{
 });
 let LPT=null,LPS=false;
 function inspectAtClient(cx,cy){
-  const st=el("stage"),W=st.clientWidth,H=st.clientHeight;
+  const W=stageW(),H=stageH();
   const {ts,ox,oy,px,py}=viewGeom(W,H);
   const r=el("cv").getBoundingClientRect();
   const mx=cx-r.left,my=cy-r.top;
@@ -5185,7 +5200,17 @@ el("btnSaveCode").onclick=openSaveCode;
 el("btnSlots").onclick=openSlots;
 refreshContinue();
 el("cv").addEventListener("click",canvasTap);
-window.addEventListener("resize",()=>{if(G){sizeCanvas();draw()}});
+let RSZT=null;
+function refit(){sizeCanvas();if(G)draw()}
+function onResize(){
+  refit();
+  clearTimeout(RSZT);
+  RSZT=setTimeout(refit,220);
+}
+window.addEventListener("resize",onResize);
+window.addEventListener("orientationchange",()=>{setTimeout(onResize,60);setTimeout(onResize,400)});
+if(window.visualViewport)window.visualViewport.addEventListener("resize",onResize);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)setTimeout(onResize,60)});
 try{
   if("serviceWorker" in navigator&&location.protocol==="https:"){
     const hadCtrl=!!navigator.serviceWorker.controller;

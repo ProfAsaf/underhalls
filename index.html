@@ -852,7 +852,7 @@ function checkSecondTrigger(){
   renderHud();
 }
 function shardFeed(){/* shards no longer grow from kills. Only triggers deepen them. */}
-const BUILD="v16 · 15 Jul";
+const BUILD="v17 · 15 Jul";
 const INVMAX=30;
 /* ============ items ============ */
 const WEAPONS={
@@ -3715,8 +3715,6 @@ function sizeCanvas(){
   CW=w;CH=h;CDPR=dpr;
   cv.width=Math.round(w*dpr);
   cv.height=Math.round(h*dpr);
-  cv.style.width=w+"px";
-  cv.style.height=h+"px";
   CTX=cv.getContext("2d");
   CTX.setTransform(dpr,0,0,dpr,0,0);
   CTX.imageSmoothingEnabled=false;

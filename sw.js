@@ -1,5 +1,5 @@
 /* UNDERHALLS offline worker. Update workflow: bump CACHE, commit, push, then open online once and relaunch. */
-const CACHE="uh2-v16";
+const CACHE="uh2-v17";
 const SEED=["./","./index.html"];
 self.addEventListener("install",e=>{
   e.waitUntil(
